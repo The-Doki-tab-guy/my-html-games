@@ -3,88 +3,203 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D FPS Shooter - Enhanced Edition</title>
+    <title>3D FPS Shooter - OVERDRIVE</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             width: 100vw; 
             height: 100vh; 
             overflow: hidden; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #050510;
+            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+            background: #000;
         }
         canvas { display: block; }
-        #hud {
+        
+        #crt-overlay {
             position: absolute;
-            color: #00ffcc;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 3px, 3px 100%;
+            pointer-events: none;
+            z-index: 2000;
+            opacity: 0.6;
+        }
+
+        #main-menu {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, #1a0b2e 0%, #050510 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+        }
+        #main-menu h1 {
+            color: #f0f;
+            font-size: 90px;
+            margin-bottom: 5px;
+            text-shadow: 0 0 30px #f0f, 0 0 10px #0ff;
+            font-style: italic;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+        }
+        #time-status {
+            color: #0ff;
+            font-size: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            margin-bottom: 20px;
+            letter-spacing: 4px;
+            background: rgba(0, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-left: 4px solid #0ff;
+        }
+        #credits-status {
+            color: #fff;
+            font-size: 24px;
+            margin-bottom: 40px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .menu-buttons {
+            display: flex;
+            gap: 20px;
+        }
+        .main-btn {
+            padding: 20px 50px;
+            font-size: 24px;
+            background: rgba(255, 0, 255, 0.1);
+            color: #fff;
+            border: 2px solid #f0f;
+            cursor: pointer;
             font-weight: bold;
-            text-shadow: 0 0 10px rgba(0, 255, 204, 0.8);
+            transition: all 0.2s;
+            border-radius: 0;
+            text-transform: uppercase;
+            text-decoration: none;
+            text-align: center;
+        }
+        .main-btn:hover {
+            background: #f0f;
+            color: #000;
+            box-shadow: 0 0 30px #f0f;
+            transform: scale(1.05);
+        }
+        .shop-btn {
+            border-color: #0ff;
+            background: rgba(0, 255, 255, 0.1);
+        }
+        .shop-btn:hover {
+            background: #0ff;
+            box-shadow: 0 0 30px #0ff;
+        }
+
+        #hud {
+            display: none;
+            position: absolute;
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0, 255, 255, 0.8);
             font-family: 'Courier New', monospace;
             user-select: none;
             pointer-events: none;
             width: 100%;
             height: 100%;
+            z-index: 100;
         }
-        #health-bar {
+        #health-bar-container {
             position: absolute;
-            bottom: 30px;
-            left: 20px;
-            width: 300px;
-            height: 30px;
-            border: 2px solid #00ffcc;
-            background: rgba(0, 0, 0, 0.7);
-            box-shadow: 0 0 15px rgba(0, 255, 204, 0.4);
+            bottom: 40px;
+            left: 40px;
+            width: 400px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #0ff;
+            padding: 5px;
+            transform: skewX(-15deg);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
         }
         #health-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #ff0055, #ffcc00, #00ffcc);
+            height: 25px;
+            background: linear-gradient(90deg, #f0f, #0ff);
             width: 100%;
-            transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: width 0.1s;
+        }
+        
+        #weapon-info {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            text-align: right;
+            transform: skewX(-15deg);
+        }
+        #weapon-name {
+            font-size: 32px;
+            color: #f0f;
+            text-shadow: 0 0 15px #f0f;
+            margin-bottom: 5px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 5px 20px;
+            border-right: 4px solid #f0f;
         }
         #ammo-counter {
-            position: absolute;
-            bottom: 30px;
-            right: 20px;
-            font-size: 24px;
-            text-align: right;
-            background: rgba(0,0,0,0.5);
-            padding: 10px 20px;
-            border-radius: 5px;
-            border: 1px solid #00ffcc;
+            font-size: 48px;
+            color: #0ff;
+            text-shadow: 0 0 15px #0ff;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 5px 20px;
+            border-right: 4px solid #0ff;
         }
+        #run-credits {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            font-size: 24px;
+            color: #0ff;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-left: 4px solid #0ff;
+        }
+
         #crosshair {
+            display: none;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 30px;
-            height: 30px;
+            width: 40px;
+            height: 40px;
             pointer-events: none;
-            transition: transform 0.1s;
+            transition: transform 0.05s, width 0.1s, height 0.1s;
+            z-index: 100;
         }
         .crosshair-line {
             position: absolute;
-            background: #00ffcc;
-            box-shadow: 0 0 8px #00ffcc;
+            background: #0ff;
+            box-shadow: 0 0 10px #0ff;
+            transition: background 0.2s, box-shadow 0.2s;
         }
-        #crosshair .horizontal { width: 20px; height: 2px; left: 5px; top: 14px; }
-        #crosshair .vertical { width: 2px; height: 20px; top: 5px; left: 14px; }
-        #crosshair.shooting { transform: translate(-50%, -50%) scale(1.5); }
+        #crosshair .horizontal { width: 14px; height: 2px; left: -2px; top: 19px; }
+        #crosshair .horizontal.right { left: 28px; }
+        #crosshair .vertical { width: 2px; height: 14px; top: -2px; left: 19px; }
+        #crosshair .vertical.bottom { top: 28px; }
+        #crosshair.shooting { transform: translate(-50%, -50%) scale(1.4); }
         
         #kill-feed {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: 30px;
+            right: 30px;
             font-size: 16px;
-            max-width: 300px;
+            max-width: 350px;
         }
         .kill-message {
-            background: rgba(0, 0, 0, 0.8);
-            padding: 8px 15px;
-            margin: 5px 0;
-            border-left: 4px solid #00ffcc;
-            animation: slideIn 0.3s, fadeOut 3s 2.7s forwards;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            margin: 8px 0;
+            border-left: 4px solid #f0f;
+            animation: slideIn 0.2s, fadeOut 2s 2s forwards;
             font-family: 'Courier New', Courier, monospace;
+            text-transform: uppercase;
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.2);
         }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
@@ -95,183 +210,220 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(5, 5, 16, 0.95);
-            padding: 50px;
+            background: rgba(10, 0, 10, 0.95);
+            padding: 60px;
             text-align: center;
-            border: 2px solid #ff0055;
-            box-shadow: 0 0 30px rgba(255, 0, 85, 0.5);
+            border: 2px solid #f00;
+            box-shadow: 0 0 50px rgba(255, 0, 0, 0.6);
             z-index: 1000;
-            border-radius: 10px;
             pointer-events: auto;
+            text-transform: uppercase;
         }
-        #game-over h1 { color: #ff0055; font-size: 60px; margin-bottom: 20px; text-shadow: 0 0 20px #ff0055; }
-        #game-over p { color: #00ffcc; font-size: 24px; margin: 10px 0; }
-        #restart-btn { 
-            margin-top: 30px; 
-            padding: 15px 30px; 
-            font-size: 20px; 
-            background: transparent;
-            color: #00ffcc; 
-            border: 2px solid #00ffcc; 
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s;
-            border-radius: 5px;
-        }
-        #restart-btn:hover { background: #00ffcc; color: #000; box-shadow: 0 0 15px #00ffcc; }
+        #game-over h1 { color: #f00; font-size: 72px; margin-bottom: 20px; text-shadow: 0 0 30px #f00; }
+        #game-over p { color: #fff; font-size: 28px; margin: 15px 0; }
         
         #instructions {
+            display: none;
             position: absolute;
-            top: 20px;
-            left: 20px;
-            color: #00ffcc;
-            font-size: 14px;
-            line-height: 1.6;
-            background: rgba(0,0,0,0.6);
-            padding: 15px;
-            border-radius: 5px;
-            border: 1px solid rgba(0, 255, 204, 0.3);
+            top: 90px;
+            left: 30px;
+            color: #0ff;
+            font-size: 16px;
+            line-height: 1.8;
+            background: rgba(0,0,0,0.7);
+            padding: 20px;
+            border-left: 4px solid #0ff;
+            z-index: 100;
         }
 
         #cheat-console {
             display: none;
             position: absolute;
-            bottom: 100px;
+            bottom: 150px;
             left: 50%;
             transform: translateX(-50%);
-            width: 500px;
-            background: rgba(0, 0, 0, 0.9);
-            border: 2px solid #ff00ff;
-            padding: 10px;
+            width: 600px;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #0ff;
+            padding: 15px;
             z-index: 2000;
-            border-radius: 5px;
-            box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.4);
         }
         #cheat-console input {
             width: 100%;
             background: transparent;
             border: none;
-            color: #ff00ff;
+            color: #0ff;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 18px;
+            font-size: 22px;
             outline: none;
+            text-transform: uppercase;
         }
         #cheat-console::before {
-            content: "> ";
-            color: #ff00ff;
-            font-size: 18px;
+            content: "SYS_OVR> ";
+            color: #0ff;
+            font-size: 22px;
             font-family: 'Courier New', Courier, monospace;
             position: absolute;
-            left: 10px;
+            left: 15px;
         }
         #cheat-input {
-            padding-left: 20px;
+            padding-left: 120px;
         }
     </style>
 </head>
 <body>
+    
+    <div id="crt-overlay"></div>
+
+    <div id="main-menu">
+        <h1>SYNTH PURGE</h1>
+        <p id="time-status"></p>
+        <p id="credits-status">BANKED CREDITS: <span id="menu-credits">0</span></p>
+        <div class="menu-buttons">
+            <button class="main-btn" id="start-btn">ENGAGE</button>
+            <a href="shop.html" class="main-btn shop-btn">BLACK MARKET</a>
+        </div>
+    </div>
+
     <div id="instructions">
-        <strong>WASD</strong> - Move<br>
-        <strong>Mouse</strong> - Look / Shoot<br>
-        <strong>Space</strong> - Jump<br>
-        <strong>` (Tilde)</strong> - Cheat Console
+        WASD : MOVE<br>
+        MOUSE : AIM / FIRE<br>
+        SPACE : JUMP<br>
+        1-2-3 : WEAPON SELECT<br>
+        ` (TILDE) : CONSOLE
     </div>
     
     <div id="hud">
+        <div id="run-credits">CREDITS: <span id="hud-credits">0</span></div>
         <div id="kill-feed"></div>
+        <div id="health-bar-container"><div id="health-fill"></div></div>
+        <div id="weapon-info">
+            <div id="weapon-name">BLASTER</div>
+            <div id="ammo-counter">120</div>
+        </div>
     </div>
     
     <div id="crosshair">
         <div class="crosshair-line horizontal"></div>
+        <div class="crosshair-line horizontal right"></div>
         <div class="crosshair-line vertical"></div>
+        <div class="crosshair-line vertical bottom"></div>
     </div>
-    
-    <div id="health-bar">
-        <div id="health-fill"></div>
-    </div>
-    
-    <div id="ammo-counter">AMMO: <span id="ammo">120</span></div>
     
     <div id="cheat-console">
         <input type="text" id="cheat-input" autocomplete="off" spellcheck="false">
     </div>
     
     <div id="game-over">
-        <h1>SYSTEM FAILURE</h1>
-        <p>Final Score: <span id="final-score">0</span></p>
-        <p>Entities Purged: <span id="kill-count">0</span></p>
-        <button id="restart-btn">REBOOT SYSTEM</button>
+        <h1>CRITICAL FAILURE</h1>
+        <p>CREDITS EARNED: <span id="final-score">0</span></p>
+        <p>PURGED: <span id="kill-count">0</span></p>
+        <button class="main-btn" onclick="location.reload()" style="margin-top: 30px; border-color:#f00; color:#f00;">REBOOT</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // --- AUDIO SYNTHESIZER ---
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let totalCredits = parseInt(localStorage.getItem('synthPurge_credits')) || 0;
+        document.getElementById('menu-credits').textContent = totalCredits;
+
+        const hasHealthUpgrade = localStorage.getItem('synthPurge_upgrade_health') === 'true';
+        const hasSpeedUpgrade = localStorage.getItem('synthPurge_upgrade_speed') === 'true';
+        const hasAmmoUpgrade = localStorage.getItem('synthPurge_upgrade_ammo') === 'true';
+
+        const currentHour = new Date().getHours();
+        const currentMins = new Date().getMinutes().toString().padStart(2, '0');
+        const isDaytime = currentHour >= 6 && currentHour < 18;
         
-        function playSound(type) {
+        document.getElementById('time-status').textContent = `[LOCAL CLOCK: ${currentHour}:${currentMins}] :: [ENVIRONMENT: ${isDaytime ? 'NEON SUNRISE' : 'MIDNIGHT GRID'}]`;
+
+        const envSettings = {
+            skyColor: isDaytime ? 0xff4400 : 0x050510,
+            fogDensity: isDaytime ? 0.008 : 0.015,
+            ambientLight: isDaytime ? 0.8 : 0.4,
+            dirLight: isDaytime ? 1.5 : 1.0,
+            groundC1: isDaytime ? '#2a0000' : '#0a0a1a',
+            groundC2: isDaytime ? '#ff0055' : '#00ffff',
+            wallC1: isDaytime ? '#1a001a' : '#111122',
+            wallC2: isDaytime ? '#ff00ff' : '#ff00ff'
+        };
+
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+        
+        function playSound(type, pitchOverride = null) {
+            if (!audioCtx) return;
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
-            
             osc.connect(gainNode);
             gainNode.connect(audioCtx.destination);
             
             if (type === 'shoot') {
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
-                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                osc.type = pitchOverride > 1000 ? 'sawtooth' : (pitchOverride < 500 ? 'square' : 'triangle');
+                osc.frequency.setValueAtTime(pitchOverride || 800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.1);
+                osc.stop(audioCtx.currentTime + 0.15);
             } else if (type === 'hit') {
                 osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.2);
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.2);
+                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.2);
             } else if (type === 'jump') {
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-                osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+                osc.frequency.linearRampToValueAtTime(700, audioCtx.currentTime + 0.1);
                 gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
                 gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'switch') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(900, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.05);
+                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.05);
             }
         }
 
-        // --- PROCEDURAL TEXTURES ---
         function createGridTexture(color1, color2) {
             const canvas = document.createElement('canvas');
             canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-            
             ctx.fillStyle = color1;
             ctx.fillRect(0, 0, 512, 512);
             ctx.strokeStyle = color2;
-            ctx.lineWidth = 4;
-            
+            ctx.lineWidth = 5;
             for(let i=0; i<=512; i+=64) {
                 ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
             }
-            
             const tex = new THREE.CanvasTexture(canvas);
             tex.wrapS = THREE.RepeatWrapping;
             tex.wrapT = THREE.RepeatWrapping;
             return tex;
         }
 
-        // --- SCENE SETUP ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x050510);
-        scene.fog = new THREE.FogExp2(0x050510, 0.015);
+        scene.background = new THREE.Color(envSettings.skyColor);
+        scene.fog = new THREE.FogExp2(envSettings.skyColor, envSettings.fogDensity);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 1.6, 0);
+        
+        const flashLight = new THREE.PointLight(0xffffff, 0, 10);
+        camera.add(flashLight);
+        scene.add(camera);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -279,91 +431,121 @@
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(renderer.domElement);
 
-        // --- LIGHTING ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+        const ambientLight = new THREE.AmbientLight(0xffffff, envSettings.ambientLight);
         scene.add(ambientLight);
 
-        const hemisphereLight = new THREE.HemisphereLight(0x00ffcc, 0xff0055, 0.5);
+        const hemisphereLight = new THREE.HemisphereLight(0x00ffff, 0xff00ff, 0.6);
         scene.add(hemisphereLight);
 
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, envSettings.dirLight);
         directionalLight.position.set(50, 100, 50);
         directionalLight.castShadow = true;
         directionalLight.shadow.mapSize.width = 2048;
         directionalLight.shadow.mapSize.height = 2048;
         scene.add(directionalLight);
 
-        // --- ENVIRONMENT ---
-        const groundTex = createGridTexture('#0a0a1a', '#003333');
-        groundTex.repeat.set(20, 20);
-        const groundGeometry = new THREE.PlaneGeometry(400, 400);
-        const groundMaterial = new THREE.MeshStandardMaterial({ 
-            map: groundTex, 
-            roughness: 0.2, 
-            metalness: 0.8 
-        });
+        const groundTex = createGridTexture(envSettings.groundC1, envSettings.groundC2);
+        groundTex.repeat.set(25, 25);
+        const groundGeometry = new THREE.PlaneGeometry(500, 500);
+        const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.1, metalness: 0.9 });
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
 
-        const wallTex = createGridTexture('#111122', '#330033');
-        wallTex.repeat.set(2, 2);
+        const wallTex = createGridTexture(envSettings.wallC1, envSettings.wallC2);
+        wallTex.repeat.set(3, 3);
         
         function createBuilding(x, z, w, h, d) {
             const geometry = new THREE.BoxGeometry(w, h, d);
-            const material = new THREE.MeshStandardMaterial({ 
-                map: wallTex,
-                roughness: 0.5,
-                metalness: 0.5
-            });
+            const material = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.3, metalness: 0.7 });
             const building = new THREE.Mesh(geometry, material);
             building.position.set(x, h / 2, z);
             building.castShadow = true;
             building.receiveShadow = true;
             scene.add(building);
-            return building;
         }
 
-        createBuilding(30, 0, 20, 25, 20);
-        createBuilding(-30, 30, 20, 15, 20);
-        createBuilding(0, -40, 15, 30, 15);
-        createBuilding(40, 40, 10, 40, 10);
-        createBuilding(-40, -40, 10, 20, 10);
-        createBuilding(0, 40, 60, 10, 10); // Arch
+        createBuilding(35, 0, 20, 30, 20);
+        createBuilding(-35, 35, 25, 18, 25);
+        createBuilding(0, -50, 15, 40, 15);
+        createBuilding(50, 50, 12, 50, 12);
+        createBuilding(-50, -50, 15, 25, 15);
+        createBuilding(0, 50, 70, 12, 12);
 
-        // --- PLAYER & CHEAT DATA ---
+        const weapons = [
+            { name: 'V-BLASTER', dmg: 35, cd: 120, cost: 1, pitch: 900, color: '#0ff' },
+            { name: 'HEAVY PULSE', dmg: 90, cd: 500, cost: 5, pitch: 300, color: '#f0f' },
+            { name: 'RAILGUN', dmg: 250, cd: 1200, cost: 15, pitch: 1800, color: '#fff' }
+        ];
+
+        let gameActive = false;
+        
         const player = {
             velocity: new THREE.Vector3(),
             grounded: false,
-            health: 100,
-            maxHealth: 100,
-            ammo: 120,
+            health: hasHealthUpgrade ? 200 : 100,
+            maxHealth: hasHealthUpgrade ? 200 : 100,
+            ammo: hasAmmoUpgrade ? 400 : 200,
             kills: 0,
-            score: 0,
-            speedMultiplier: 1,
+            sessionCredits: 0,
+            speedMultiplier: hasSpeedUpgrade ? 1.5 : 1,
             godmode: false,
             infiniteAmmo: false,
-            isDead: false
+            isDead: false,
+            weaponIndex: 0
         };
 
-        // --- INPUT HANDLING ---
+        function updateWeaponUI() {
+            const wp = weapons[player.weaponIndex];
+            document.getElementById('weapon-name').textContent = wp.name;
+            document.getElementById('weapon-name').style.color = wp.color;
+            document.getElementById('weapon-name').style.borderRightColor = wp.color;
+            document.getElementById('weapon-name').style.textShadow = `0 0 15px ${wp.color}`;
+            const lines = document.querySelectorAll('.crosshair-line');
+            lines.forEach(l => {
+                l.style.background = wp.color;
+                l.style.boxShadow = `0 0 10px ${wp.color}`;
+            });
+            playSound('switch');
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            initAudio();
+            document.getElementById('main-menu').style.display = 'none';
+            document.getElementById('hud').style.display = 'block';
+            document.getElementById('instructions').style.display = 'block';
+            document.getElementById('crosshair').style.display = 'block';
+            gameActive = true;
+            for (let i = 0; i < 7; i++) spawnEnemy();
+            renderer.domElement.requestPointerLock();
+            updateWeaponUI();
+            lastTime = performance.now();
+            animate();
+        });
+
         const keys = {};
         let isConsoleOpen = false;
 
         window.addEventListener('keydown', (e) => { 
+            if (!gameActive) return;
             if (e.key === '`') {
                 e.preventDefault();
                 toggleCheatConsole();
                 return;
             }
-            if (!isConsoleOpen) keys[e.key.toLowerCase()] = true; 
+            if (!isConsoleOpen) {
+                keys[e.key.toLowerCase()] = true;
+                if (e.key === '1' && player.weaponIndex !== 0) { player.weaponIndex = 0; updateWeaponUI(); }
+                if (e.key === '2' && player.weaponIndex !== 1) { player.weaponIndex = 1; updateWeaponUI(); }
+                if (e.key === '3' && player.weaponIndex !== 2) { player.weaponIndex = 2; updateWeaponUI(); }
+            }
         });
         window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
         let pitch = 0, yaw = 0;
         document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === renderer.domElement && !player.isDead) {
+            if (gameActive && document.pointerLockElement === renderer.domElement && !player.isDead) {
                 yaw -= e.movementX * 0.002;
                 pitch -= e.movementY * 0.002;
                 pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
@@ -371,35 +553,38 @@
         });
 
         document.addEventListener('click', (e) => {
-            if (!isConsoleOpen && !player.isDead && document.pointerLockElement !== renderer.domElement) {
+            if (gameActive && !isConsoleOpen && !player.isDead && document.pointerLockElement !== renderer.domElement) {
                 renderer.domElement.requestPointerLock();
             }
         });
 
-        // --- SHOOTING ---
         let lastShotTime = 0;
-        const shootCooldown = 120;
         const crosshair = document.getElementById('crosshair');
 
         document.addEventListener('mousedown', (e) => {
-            if (document.pointerLockElement !== renderer.domElement || player.isDead || isConsoleOpen) return;
+            if (!gameActive || document.pointerLockElement !== renderer.domElement || player.isDead || isConsoleOpen) return;
             
             const now = Date.now();
-            if (now - lastShotTime > shootCooldown && (player.ammo > 0 || player.infiniteAmmo)) {
+            const wp = weapons[player.weaponIndex];
+            
+            if (now - lastShotTime > wp.cd && (player.ammo >= wp.cost || player.infiniteAmmo)) {
                 lastShotTime = now;
-                if (!player.infiniteAmmo) player.ammo--;
+                if (!player.infiniteAmmo) player.ammo -= wp.cost;
                 
-                playSound('shoot');
+                playSound('shoot', wp.pitch);
                 
-                // Crosshair animation
+                flashLight.intensity = 2;
+                flashLight.color.set(wp.color);
+                setTimeout(() => flashLight.intensity = 0, 50);
+
                 crosshair.classList.add('shooting');
                 setTimeout(() => crosshair.classList.remove('shooting'), 50);
 
-                shoot();
+                shoot(wp);
             }
         });
 
-        function shoot() {
+        function shoot(wp) {
             const raycaster = new THREE.Raycaster(camera.position, camera.getWorldDirection(new THREE.Vector3()));
             const intersects = raycaster.intersectObjects(enemies.map(e => e.group), true);
             
@@ -411,89 +596,86 @@
                 
                 if(target.userData && target.userData.health !== undefined) {
                     playSound('hit');
-                    target.userData.health -= 35;
-                    target.userData.hitEffect = 15;
+                    target.userData.health -= wp.dmg;
+                    target.userData.hitEffect = 10;
                     
                     if (target.userData.health <= 0) {
                         removeEnemy(target);
                         player.kills++;
-                        player.score += 150;
-                        addKillMessage('Entity Purged :: +150 PTS');
+                        player.sessionCredits += 150;
+                        player.ammo += 10; 
+                        addKillMessage(`ENTITY PURGED [+150 CR]`);
+                        
+                        totalCredits += 150;
+                        localStorage.setItem('synthPurge_credits', totalCredits);
+                        document.getElementById('hud-credits').textContent = totalCredits;
                     }
                 }
             }
         }
 
-        // --- ENEMY SYSTEM ---
         const enemies = [];
         class Enemy {
             constructor(x, z) {
                 this.group = new THREE.Group();
-                this.group.position.set(x, 0, z);
+                this.group.position.set(x, 2, z);
                 
-                // Glowing Body
-                const bodyGeom = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+                const bodyGeom = new THREE.OctahedronGeometry(1.2, 0);
                 this.bodyMat = new THREE.MeshStandardMaterial({ 
                     color: 0xff0055, 
                     emissive: 0xff0055,
-                    emissiveIntensity: 0.5,
-                    roughness: 0.2 
+                    emissiveIntensity: 0.8,
+                    wireframe: true
                 });
                 this.body = new THREE.Mesh(bodyGeom, this.bodyMat);
-                this.body.position.y = 1;
                 this.body.castShadow = true;
                 this.group.add(this.body);
 
-                // Eye
-                const eyeGeom = new THREE.BoxGeometry(0.6, 0.2, 0.6);
-                const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-                this.eye = new THREE.Mesh(eyeGeom, eyeMat);
-                this.eye.position.set(0, 1.5, 0.3);
-                this.group.add(this.eye);
+                const coreGeom = new THREE.IcosahedronGeometry(0.6, 0);
+                const coreMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff });
+                this.core = new THREE.Mesh(coreGeom, coreMat);
+                this.group.add(this.core);
 
                 scene.add(this.group);
 
-                this.group.userData = {
-                    health: 100,
-                    hitEffect: 0
-                };
-
+                this.group.userData = { health: 150, hitEffect: 0 };
                 this.velocity = new THREE.Vector3();
-                this.speed = 3 + Math.random() * 2;
+                this.speed = 4 + Math.random() * 3;
+                this.hoverOffset = Math.random() * Math.PI * 2;
                 enemies.push(this);
             }
 
-            update(delta) {
+            update(delta, time) {
                 const toPlayer = new THREE.Vector3().subVectors(camera.position, this.group.position);
-                toPlayer.y = 0; // Keep movement on ground plane
+                toPlayer.y = 0; 
                 const distToPlayer = toPlayer.length();
 
-                if (distToPlayer < 50) {
+                if (distToPlayer < 70) {
                     const dir = toPlayer.normalize();
                     this.velocity.x = dir.x * this.speed;
                     this.velocity.z = dir.z * this.speed;
-                    
-                    // Rotate to face player
-                    this.group.lookAt(camera.position.x, this.group.position.y, camera.position.z);
                 }
 
                 this.group.position.x += this.velocity.x * delta;
                 this.group.position.z += this.velocity.z * delta;
+                this.group.position.y = 2 + Math.sin(time * 3 + this.hoverOffset) * 0.5;
 
-                // Damage
-                if (distToPlayer < 2 && Math.random() < 0.05 && !player.godmode) {
-                    player.health -= 10;
+                this.body.rotation.y += delta;
+                this.body.rotation.x += delta * 0.5;
+                this.core.rotation.y -= delta * 2;
+
+                if (distToPlayer < 2.5 && Math.random() < 0.1 && !player.godmode) {
+                    player.health -= 15;
                     if (player.health <= 0 && !player.isDead) endGame();
                 }
 
-                // Hit Flash Effect
                 if (this.group.userData.hitEffect > 0) {
-                    this.bodyMat.emissiveIntensity = 2;
                     this.bodyMat.color.setHex(0xffffff);
+                    this.bodyMat.wireframe = false;
                     this.group.userData.hitEffect--;
                 } else {
-                    this.bodyMat.emissiveIntensity = 0.5;
                     this.bodyMat.color.setHex(0xff0055);
+                    this.bodyMat.wireframe = true;
                 }
             }
         }
@@ -508,11 +690,10 @@
 
         function spawnEnemy() {
             const angle = Math.random() * Math.PI * 2;
-            const distance = 40 + Math.random() * 40;
+            const distance = 40 + Math.random() * 60;
             new Enemy(Math.cos(angle) * distance, Math.sin(angle) * distance);
         }
 
-        // --- CHEAT SYSTEM ---
         const cheatInput = document.getElementById('cheat-input');
         const cheatConsole = document.getElementById('cheat-console');
 
@@ -531,75 +712,67 @@
 
         cheatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                processCheat(cheatInput.value.trim().toLowerCase());
+                const cmd = cheatInput.value.trim().toLowerCase();
+                if(cmd === 'godmode' || cmd === 'iddqd') {
+                    player.godmode = !player.godmode;
+                    addKillMessage(`SYS: GODMODE ${player.godmode ? 'ON' : 'OFF'}`);
+                } else if(cmd === 'ammo' || cmd === 'idkfa') {
+                    player.infiniteAmmo = !player.infiniteAmmo;
+                    if(player.infiniteAmmo) player.ammo = 9999;
+                    addKillMessage(`SYS: INF AMMO ${player.infiniteAmmo ? 'ON' : 'OFF'}`);
+                } else if(cmd === 'sonic') {
+                    player.speedMultiplier = player.speedMultiplier === 1 ? 2.5 : 1;
+                    addKillMessage(`SYS: SPEED x${player.speedMultiplier}`);
+                } else if(cmd === 'spawn') {
+                    spawnEnemy();
+                    addKillMessage('SYS: ENTITY FORCED');
+                } else if(cmd === 'heal') {
+                    player.health = player.maxHealth;
+                    addKillMessage('SYS: INTEGRITY RESTORED');
+                } else if(cmd === 'money') {
+                    totalCredits += 5000;
+                    localStorage.setItem('synthPurge_credits', totalCredits);
+                    document.getElementById('hud-credits').textContent = totalCredits;
+                    addKillMessage('SYS: CREDITS INJECTED');
+                } else if(cmd === 'help') {
+                    window.open('cheats.html', '_blank');
+                } else if(cmd !== '') {
+                    addKillMessage('SYS: INVALID SYNTAX');
+                }
                 toggleCheatConsole();
             }
         });
 
-        function processCheat(cmd) {
-            switch(cmd) {
-                case 'help':
-                    window.open('cheats.html', '_blank');
-                    break;
-                case 'iddqd':
-                case 'godmode':
-                    player.godmode = !player.godmode;
-                    addKillMessage(`SYS: GODMODE ${player.godmode ? 'ENABLED' : 'DISABLED'}`);
-                    break;
-                case 'idkfa':
-                case 'ammo':
-                    player.infiniteAmmo = !player.infiniteAmmo;
-                    if(player.infiniteAmmo) player.ammo = 999;
-                    addKillMessage(`SYS: INFINITE AMMO ${player.infiniteAmmo ? 'ENABLED' : 'DISABLED'}`);
-                    break;
-                case 'sonic':
-                    player.speedMultiplier = player.speedMultiplier === 1 ? 2.5 : 1;
-                    addKillMessage(`SYS: SPEED x${player.speedMultiplier}`);
-                    break;
-                case 'spawn':
-                    spawnEnemy();
-                    addKillMessage('SYS: ENTITY SPAWNED');
-                    break;
-                case 'heal':
-                    player.health = player.maxHealth;
-                    addKillMessage('SYS: HEALTH RESTORED');
-                    break;
-                default:
-                    if(cmd !== '') addKillMessage('SYS: UNKNOWN COMMAND');
-            }
-        }
-
-        // --- UI & GAME LOGIC ---
         function addKillMessage(msg) {
             const feed = document.getElementById('kill-feed');
             const div = document.createElement('div');
             div.className = 'kill-message';
             div.textContent = msg;
             feed.appendChild(div);
-            setTimeout(() => div.remove(), 3000);
+            setTimeout(() => div.remove(), 4000);
         }
 
         function endGame() {
             player.isDead = true;
             document.exitPointerLock();
+            document.getElementById('hud').style.display = 'none';
+            document.getElementById('crosshair').style.display = 'none';
+            document.getElementById('instructions').style.display = 'none';
             document.getElementById('game-over').style.display = 'block';
-            document.getElementById('final-score').textContent = player.score;
+            document.getElementById('final-score').textContent = player.sessionCredits;
             document.getElementById('kill-count').textContent = player.kills;
         }
 
-        document.getElementById('restart-btn').addEventListener('click', () => location.reload());
-
-        // --- MAIN LOOP ---
-        let lastTime = performance.now();
+        let lastTime = 0;
         
         function update() {
             const now = performance.now();
             const delta = Math.min((now - lastTime) / 1000, 0.1);
             lastTime = now;
+            const timeSec = now / 1000;
 
-            if (player.isDead) return;
+            if (player.isDead || !gameActive) return;
 
-            // Movement Physics
             const moveDir = new THREE.Vector3();
             if (keys['w']) moveDir.z -= 1;
             if (keys['s']) moveDir.z += 1;
@@ -613,20 +786,19 @@
                 const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), camDir).normalize();
                 const forward = new THREE.Vector3(camDir.x, 0, camDir.z).normalize();
 
-                const speed = 8 * player.speedMultiplier;
+                const speed = 12 * player.speedMultiplier;
                 player.velocity.x = (right.x * moveDir.x + forward.x * moveDir.z) * speed;
                 player.velocity.z = (right.z * moveDir.x + forward.z * moveDir.z) * speed;
             } else {
-                player.velocity.x *= 0.8; // Friction
-                player.velocity.z *= 0.8;
+                player.velocity.x *= 0.75; 
+                player.velocity.z *= 0.75;
             }
 
-            // Gravity & Jumping
-            player.velocity.y -= 25 * delta;
+            player.velocity.y -= 30 * delta;
             camera.position.y += player.velocity.y * delta;
             
-            if (camera.position.y <= 1.6) {
-                camera.position.y = 1.6;
+            if (camera.position.y <= 1.8) {
+                camera.position.y = 1.8;
                 player.velocity.y = 0;
                 player.grounded = true;
             } else {
@@ -634,53 +806,48 @@
             }
 
             if (keys[' '] && player.grounded && !isConsoleOpen) {
-                player.velocity.y = 10;
+                player.velocity.y = 12;
                 playSound('jump');
-                keys[' '] = false; // Prevent holding space to bounce
+                keys[' '] = false; 
             }
 
-            // Apply horizontal movement
             camera.position.x += player.velocity.x * delta;
             camera.position.z += player.velocity.z * delta;
 
-            // Map Bounds
-            camera.position.x = Math.max(-190, Math.min(190, camera.position.x));
-            camera.position.z = Math.max(-190, Math.min(190, camera.position.z));
+            camera.position.x = Math.max(-240, Math.min(240, camera.position.x));
+            camera.position.z = Math.max(-240, Math.min(240, camera.position.z));
 
-            // Apply Camera Rotation
             camera.rotation.order = 'YXZ';
             camera.rotation.y = yaw;
             camera.rotation.x = pitch;
 
-            // Update Entities & Waves
-            enemies.forEach(enemy => enemy.update(delta));
+            enemies.forEach(enemy => enemy.update(delta, timeSec));
 
             if (enemies.length === 0) {
-                for (let i = 0; i < 5 + Math.floor(player.kills / 2); i++) spawnEnemy();
-                addKillMessage('SYS: NEW WAVE DETECTED');
+                for (let i = 0; i < 7 + Math.floor(player.kills / 2); i++) spawnEnemy();
+                addKillMessage('SYS: ESCALATION DETECTED');
             }
 
-            // Update UI
-            document.getElementById('ammo').textContent = player.infiniteAmmo ? '∞' : player.ammo;
+            document.getElementById('hud-credits').textContent = totalCredits;
+            document.getElementById('ammo-counter').textContent = player.infiniteAmmo ? 'INF' : player.ammo;
             const healthPercent = Math.max(0, (player.health / player.maxHealth) * 100);
             document.getElementById('health-fill').style.width = healthPercent + '%';
         }
 
         function animate() {
+            if (!gameActive) return;
             requestAnimationFrame(animate);
             update();
             renderer.render(scene, camera);
         }
-
-        // Init
-        for (let i = 0; i < 5; i++) spawnEnemy();
-        animate();
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+        
+        renderer.render(scene, camera);
     </script>
 </body>
 </html>

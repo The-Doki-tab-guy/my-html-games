@@ -61,10 +61,6 @@
             margin-bottom: 40px;
             font-family: 'Courier New', Courier, monospace;
         }
-        .menu-buttons {
-            display: flex;
-            gap: 20px;
-        }
         .main-btn {
             padding: 20px 50px;
             font-size: 24px;
@@ -74,24 +70,13 @@
             cursor: pointer;
             font-weight: bold;
             transition: all 0.2s;
-            border-radius: 0;
             text-transform: uppercase;
-            text-decoration: none;
-            text-align: center;
         }
         .main-btn:hover {
             background: #f0f;
             color: #000;
             box-shadow: 0 0 30px #f0f;
             transform: scale(1.05);
-        }
-        .shop-btn {
-            border-color: #0ff;
-            background: rgba(0, 255, 255, 0.1);
-        }
-        .shop-btn:hover {
-            background: #0ff;
-            box-shadow: 0 0 30px #0ff;
         }
 
         #hud {
@@ -204,37 +189,81 @@
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
         
-        #game-over {
+        #interaction-prompt {
+            display: none;
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #ffff00;
+            text-shadow: 0 0 10px #ffff00;
+            background: rgba(0,0,0,0.8);
+            padding: 10px 20px;
+            border: 2px solid #ffff00;
+            z-index: 100;
+        }
+
+        #dashboard {
+            display: none;
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #0ff;
+            padding: 20px;
+            display: flex;
+            gap: 40px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+        .dash-gauge {
+            text-align: center;
+        }
+        .dash-val {
+            font-size: 40px;
+            color: #f0f;
+            font-family: 'Courier New', Courier, monospace;
+            text-shadow: 0 0 15px #f0f;
+        }
+        .dash-label {
+            font-size: 14px;
+            color: #0ff;
+            letter-spacing: 2px;
+        }
+
+        #in-game-shop {
             display: none;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(10, 0, 10, 0.95);
-            padding: 60px;
-            text-align: center;
-            border: 2px solid #f00;
-            box-shadow: 0 0 50px rgba(255, 0, 0, 0.6);
-            z-index: 1000;
-            pointer-events: auto;
-            text-transform: uppercase;
+            background: rgba(5, 5, 20, 0.95);
+            border: 2px solid #0ff;
+            padding: 40px;
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.4);
+            z-index: 2500;
+            flex-direction: column;
+            align-items: center;
         }
-        #game-over h1 { color: #f00; font-size: 72px; margin-bottom: 20px; text-shadow: 0 0 30px #f00; }
-        #game-over p { color: #fff; font-size: 28px; margin: 15px 0; }
-        
-        #instructions {
-            display: none;
-            position: absolute;
-            top: 90px;
-            left: 30px;
-            color: #0ff;
-            font-size: 16px;
-            line-height: 1.8;
-            background: rgba(0,0,0,0.7);
+        .shop-items { display: flex; gap: 20px; margin: 30px 0; }
+        .shop-card {
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #f0f;
             padding: 20px;
-            border-left: 4px solid #0ff;
-            z-index: 100;
+            text-align: center;
+            width: 250px;
         }
+        .shop-card h3 { color: #fff; margin-bottom: 10px; }
+        .shop-card p { color: #aaa; font-size: 12px; margin-bottom: 15px; height: 40px; }
+        .shop-card .cost { color: #f0f; font-size: 20px; margin-bottom: 15px; font-family: 'Courier New'; }
+        .shop-card button {
+            background: transparent; border: 2px solid #0ff; color: #0ff; padding: 10px 20px; cursor: pointer; width: 100%; transition: 0.2s;
+        }
+        .shop-card button:hover { background: #0ff; color: #000; }
+        .close-shop { border: 2px solid #f00; color: #f00; background: transparent; padding: 10px 30px; cursor: pointer; margin-top: 20px; }
+        .close-shop:hover { background: #f00; color: #000; }
 
         #cheat-console {
             display: none;
@@ -267,9 +296,7 @@
             position: absolute;
             left: 15px;
         }
-        #cheat-input {
-            padding-left: 120px;
-        }
+        #cheat-input { padding-left: 120px; }
     </style>
 </head>
 <body>
@@ -280,18 +307,7 @@
         <h1>SYNTH PURGE</h1>
         <p id="time-status"></p>
         <p id="credits-status">BANKED CREDITS: <span id="menu-credits">0</span></p>
-        <div class="menu-buttons">
-            <button class="main-btn" id="start-btn">ENGAGE</button>
-            <a href="shop.html" class="main-btn shop-btn">BLACK MARKET</a>
-        </div>
-    </div>
-
-    <div id="instructions">
-        WASD : MOVE<br>
-        MOUSE : AIM / FIRE<br>
-        SPACE : JUMP<br>
-        1-2-3 : WEAPON SELECT<br>
-        ` (TILDE) : CONSOLE
+        <button class="main-btn" id="start-btn">ENGAGE</button>
     </div>
     
     <div id="hud">
@@ -302,7 +318,20 @@
             <div id="weapon-name">BLASTER</div>
             <div id="ammo-counter">120</div>
         </div>
+        
+        <div id="dashboard" style="display: none;">
+            <div class="dash-gauge">
+                <div class="dash-val" id="dash-speed">0</div>
+                <div class="dash-label">MPH</div>
+            </div>
+            <div class="dash-gauge">
+                <div class="dash-val" id="dash-rpm">1000</div>
+                <div class="dash-label">RPM</div>
+            </div>
+        </div>
     </div>
+    
+    <div id="interaction-prompt">PRESS [E] TO INTERACT</div>
     
     <div id="crosshair">
         <div class="crosshair-line horizontal"></div>
@@ -311,25 +340,40 @@
         <div class="crosshair-line vertical bottom"></div>
     </div>
     
+    <div id="in-game-shop">
+        <h2 style="color: #0ff; font-size: 36px; text-shadow: 0 0 15px #0ff;">UPGRADE TERMINAL</h2>
+        <div style="color: #f0f; font-size: 20px; margin-top: 10px;">CREDITS: <span id="shop-credits-display">0</span></div>
+        <div class="shop-items">
+            <div class="shop-card">
+                <h3>OVERCHARGE BLASTER</h3>
+                <p>Increase base weapon damage by 50%.</p>
+                <div class="cost">1000 CR</div>
+                <button onclick="buyInGameUpgrade('dmg', 1000)">PURCHASE</button>
+            </div>
+            <div class="shop-card">
+                <h3>NITRO INJECTION</h3>
+                <p>Increase vehicle acceleration and top speed.</p>
+                <div class="cost">2000 CR</div>
+                <button onclick="buyInGameUpgrade('car', 2000)">PURCHASE</button>
+            </div>
+            <div class="shop-card">
+                <h3>HULL REPAIR</h3>
+                <p>Instantly restore system integrity.</p>
+                <div class="cost">500 CR</div>
+                <button onclick="buyInGameUpgrade('heal', 500)">PURCHASE</button>
+            </div>
+        </div>
+        <button class="close-shop" onclick="closeShop()">EXIT TERMINAL</button>
+    </div>
+
     <div id="cheat-console">
         <input type="text" id="cheat-input" autocomplete="off" spellcheck="false">
-    </div>
-    
-    <div id="game-over">
-        <h1>CRITICAL FAILURE</h1>
-        <p>CREDITS EARNED: <span id="final-score">0</span></p>
-        <p>PURGED: <span id="kill-count">0</span></p>
-        <button class="main-btn" onclick="location.reload()" style="margin-top: 30px; border-color:#f00; color:#f00;">REBOOT</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         let totalCredits = parseInt(localStorage.getItem('synthPurge_credits')) || 0;
         document.getElementById('menu-credits').textContent = totalCredits;
-
-        const hasHealthUpgrade = localStorage.getItem('synthPurge_upgrade_health') === 'true';
-        const hasSpeedUpgrade = localStorage.getItem('synthPurge_upgrade_speed') === 'true';
-        const hasAmmoUpgrade = localStorage.getItem('synthPurge_upgrade_ammo') === 'true';
 
         const currentHour = new Date().getHours();
         const currentMins = new Date().getMinutes().toString().padStart(2, '0');
@@ -339,7 +383,7 @@
 
         const envSettings = {
             skyColor: isDaytime ? 0xff4400 : 0x050510,
-            fogDensity: isDaytime ? 0.008 : 0.015,
+            fogDensity: isDaytime ? 0.006 : 0.012,
             ambientLight: isDaytime ? 0.8 : 0.4,
             dirLight: isDaytime ? 1.5 : 1.0,
             groundC1: isDaytime ? '#2a0000' : '#0a0a1a',
@@ -377,22 +421,6 @@
                 gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.2);
-            } else if (type === 'jump') {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-                osc.frequency.linearRampToValueAtTime(700, audioCtx.currentTime + 0.1);
-                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.1);
-            } else if (type === 'switch') {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(900, audioCtx.currentTime);
-                osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.05);
-                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.05);
             }
         }
 
@@ -437,13 +465,6 @@
         const hemisphereLight = new THREE.HemisphereLight(0x00ffff, 0xff00ff, 0.6);
         scene.add(hemisphereLight);
 
-        const directionalLight = new THREE.DirectionalLight(0xffffff, envSettings.dirLight);
-        directionalLight.position.set(50, 100, 50);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-        scene.add(directionalLight);
-
         const groundTex = createGridTexture(envSettings.groundC1, envSettings.groundC2);
         groundTex.repeat.set(25, 25);
         const groundGeometry = new THREE.PlaneGeometry(500, 500);
@@ -470,8 +491,50 @@
         createBuilding(-35, 35, 25, 18, 25);
         createBuilding(0, -50, 15, 40, 15);
         createBuilding(50, 50, 12, 50, 12);
-        createBuilding(-50, -50, 15, 25, 15);
-        createBuilding(0, 50, 70, 12, 12);
+        
+        const shopEntities = [];
+        function createShopTerminal(x, z) {
+            const group = new THREE.Group();
+            group.position.set(x, 1, z);
+            
+            const baseGeom = new THREE.BoxGeometry(3, 2, 3);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 });
+            const base = new THREE.Mesh(baseGeom, baseMat);
+            group.add(base);
+
+            const holoGeom = new THREE.CylinderGeometry(1.5, 1.5, 0.1, 16);
+            const holoMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 });
+            const holo = new THREE.Mesh(holoGeom, holoMat);
+            holo.position.y = 1.5;
+            group.add(holo);
+
+            scene.add(group);
+            shopEntities.push(group);
+        }
+        createShopTerminal(20, -20);
+        createShopTerminal(-20, 20);
+
+        const carEntities = [];
+        class Car {
+            constructor(x, z) {
+                this.group = new THREE.Group();
+                this.group.position.set(x, 0.5, z);
+                
+                const bodyGeom = new THREE.BoxGeometry(2.5, 1, 5);
+                const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff00ff, metalness: 0.8, roughness: 0.2 });
+                this.body = new THREE.Mesh(bodyGeom, bodyMat);
+                this.body.position.y = 0.5;
+                this.group.add(this.body);
+
+                scene.add(this.group);
+                carEntities.push(this);
+
+                this.speed = 0;
+                this.angle = 0;
+            }
+        }
+        new Car(10, 10);
+        new Car(-15, -15);
 
         const weapons = [
             { name: 'V-BLASTER', dmg: 35, cd: 120, cost: 1, pitch: 900, color: '#0ff' },
@@ -484,16 +547,21 @@
         const player = {
             velocity: new THREE.Vector3(),
             grounded: false,
-            health: hasHealthUpgrade ? 200 : 100,
-            maxHealth: hasHealthUpgrade ? 200 : 100,
-            ammo: hasAmmoUpgrade ? 400 : 200,
+            health: 200,
+            maxHealth: 200,
+            ammo: 400,
             kills: 0,
-            sessionCredits: 0,
-            speedMultiplier: hasSpeedUpgrade ? 1.5 : 1,
+            speedMultiplier: 1.5,
+            dmgMultiplier: 1.0,
+            carAccel: 0.05,
+            carMaxSpeed: 1.5,
             godmode: false,
             infiniteAmmo: false,
+            noclip: false,
             isDead: false,
-            weaponIndex: 0
+            weaponIndex: 0,
+            state: 'walking',
+            currentCar: null
         };
 
         function updateWeaponUI() {
@@ -503,18 +571,13 @@
             document.getElementById('weapon-name').style.borderRightColor = wp.color;
             document.getElementById('weapon-name').style.textShadow = `0 0 15px ${wp.color}`;
             const lines = document.querySelectorAll('.crosshair-line');
-            lines.forEach(l => {
-                l.style.background = wp.color;
-                l.style.boxShadow = `0 0 10px ${wp.color}`;
-            });
-            playSound('switch');
+            lines.forEach(l => { l.style.background = wp.color; l.style.boxShadow = `0 0 10px ${wp.color}`; });
         }
 
         document.getElementById('start-btn').addEventListener('click', () => {
             initAudio();
             document.getElementById('main-menu').style.display = 'none';
             document.getElementById('hud').style.display = 'block';
-            document.getElementById('instructions').style.display = 'block';
             document.getElementById('crosshair').style.display = 'block';
             gameActive = true;
             for (let i = 0; i < 7; i++) spawnEnemy();
@@ -526,19 +589,20 @@
 
         const keys = {};
         let isConsoleOpen = false;
+        let isShopOpen = false;
+        let interactTarget = null;
 
         window.addEventListener('keydown', (e) => { 
             if (!gameActive) return;
-            if (e.key === '`') {
-                e.preventDefault();
-                toggleCheatConsole();
-                return;
-            }
-            if (!isConsoleOpen) {
+            if (e.key === '`') { e.preventDefault(); toggleCheatConsole(); return; }
+            if (e.key.toLowerCase() === 'e' && !isConsoleOpen && !isShopOpen) handleInteraction();
+            if (!isConsoleOpen && !isShopOpen) {
                 keys[e.key.toLowerCase()] = true;
-                if (e.key === '1' && player.weaponIndex !== 0) { player.weaponIndex = 0; updateWeaponUI(); }
-                if (e.key === '2' && player.weaponIndex !== 1) { player.weaponIndex = 1; updateWeaponUI(); }
-                if (e.key === '3' && player.weaponIndex !== 2) { player.weaponIndex = 2; updateWeaponUI(); }
+                if (player.state === 'walking') {
+                    if (e.key === '1' && player.weaponIndex !== 0) { player.weaponIndex = 0; updateWeaponUI(); }
+                    if (e.key === '2' && player.weaponIndex !== 1) { player.weaponIndex = 1; updateWeaponUI(); }
+                    if (e.key === '3' && player.weaponIndex !== 2) { player.weaponIndex = 2; updateWeaponUI(); }
+                }
             }
         });
         window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
@@ -547,13 +611,17 @@
         document.addEventListener('mousemove', (e) => {
             if (gameActive && document.pointerLockElement === renderer.domElement && !player.isDead) {
                 yaw -= e.movementX * 0.002;
-                pitch -= e.movementY * 0.002;
-                pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                if (player.state === 'walking') {
+                    pitch -= e.movementY * 0.002;
+                    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                } else if (player.state === 'driving') {
+                    pitch = 0;
+                }
             }
         });
 
         document.addEventListener('click', (e) => {
-            if (gameActive && !isConsoleOpen && !player.isDead && document.pointerLockElement !== renderer.domElement) {
+            if (gameActive && !isConsoleOpen && !isShopOpen && !player.isDead && document.pointerLockElement !== renderer.domElement) {
                 renderer.domElement.requestPointerLock();
             }
         });
@@ -562,7 +630,7 @@
         const crosshair = document.getElementById('crosshair');
 
         document.addEventListener('mousedown', (e) => {
-            if (!gameActive || document.pointerLockElement !== renderer.domElement || player.isDead || isConsoleOpen) return;
+            if (!gameActive || document.pointerLockElement !== renderer.domElement || player.isDead || isConsoleOpen || isShopOpen || player.state === 'driving') return;
             
             const now = Date.now();
             const wp = weapons[player.weaponIndex];
@@ -570,16 +638,11 @@
             if (now - lastShotTime > wp.cd && (player.ammo >= wp.cost || player.infiniteAmmo)) {
                 lastShotTime = now;
                 if (!player.infiniteAmmo) player.ammo -= wp.cost;
-                
                 playSound('shoot', wp.pitch);
-                
-                flashLight.intensity = 2;
-                flashLight.color.set(wp.color);
+                flashLight.intensity = 2; flashLight.color.set(wp.color);
                 setTimeout(() => flashLight.intensity = 0, 50);
-
                 crosshair.classList.add('shooting');
                 setTimeout(() => crosshair.classList.remove('shooting'), 50);
-
                 shoot(wp);
             }
         });
@@ -590,28 +653,70 @@
             
             if (intersects.length > 0) {
                 let target = intersects[0].object;
-                while(target.parent && target.userData.health === undefined) {
-                    target = target.parent;
-                }
+                while(target.parent && target.userData.health === undefined) { target = target.parent; }
                 
                 if(target.userData && target.userData.health !== undefined) {
                     playSound('hit');
-                    target.userData.health -= wp.dmg;
+                    target.userData.health -= (wp.dmg * player.dmgMultiplier);
                     target.userData.hitEffect = 10;
                     
                     if (target.userData.health <= 0) {
                         removeEnemy(target);
                         player.kills++;
-                        player.sessionCredits += 150;
                         player.ammo += 10; 
-                        addKillMessage(`ENTITY PURGED [+150 CR]`);
-                        
                         totalCredits += 150;
                         localStorage.setItem('synthPurge_credits', totalCredits);
                         document.getElementById('hud-credits').textContent = totalCredits;
+                        addKillMessage(`ENTITY PURGED [+150 CR]`);
                     }
                 }
             }
+        }
+
+        function handleInteraction() {
+            if (player.state === 'driving') {
+                player.state = 'walking';
+                camera.position.copy(player.currentCar.group.position);
+                camera.position.y += 1.6;
+                camera.position.x += 3; 
+                player.currentCar = null;
+                document.getElementById('dashboard').style.display = 'none';
+                document.getElementById('crosshair').style.display = 'block';
+                return;
+            }
+
+            if (interactTarget) {
+                if (interactTarget.type === 'car') {
+                    player.state = 'driving';
+                    player.currentCar = interactTarget.obj;
+                    document.getElementById('dashboard').style.display = 'flex';
+                    document.getElementById('crosshair').style.display = 'none';
+                } else if (interactTarget.type === 'shop') {
+                    isShopOpen = true;
+                    document.exitPointerLock();
+                    document.getElementById('in-game-shop').style.display = 'flex';
+                    document.getElementById('shop-credits-display').textContent = totalCredits;
+                }
+            }
+        }
+
+        function buyInGameUpgrade(type, cost) {
+            if (totalCredits >= cost) {
+                totalCredits -= cost;
+                localStorage.setItem('synthPurge_credits', totalCredits);
+                document.getElementById('shop-credits-display').textContent = totalCredits;
+                document.getElementById('hud-credits').textContent = totalCredits;
+                
+                if (type === 'dmg') player.dmgMultiplier += 0.5;
+                if (type === 'car') { player.carAccel += 0.05; player.carMaxSpeed += 0.5; }
+                if (type === 'heal') player.health = player.maxHealth;
+            }
+        }
+
+        window.closeShop = function() {
+            isShopOpen = false;
+            document.getElementById('in-game-shop').style.display = 'none';
+            renderer.domElement.requestPointerLock();
         }
 
         const enemies = [];
@@ -621,21 +726,9 @@
                 this.group.position.set(x, 2, z);
                 
                 const bodyGeom = new THREE.OctahedronGeometry(1.2, 0);
-                this.bodyMat = new THREE.MeshStandardMaterial({ 
-                    color: 0xff0055, 
-                    emissive: 0xff0055,
-                    emissiveIntensity: 0.8,
-                    wireframe: true
-                });
+                this.bodyMat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0xff0055, emissiveIntensity: 0.8, wireframe: true });
                 this.body = new THREE.Mesh(bodyGeom, this.bodyMat);
-                this.body.castShadow = true;
                 this.group.add(this.body);
-
-                const coreGeom = new THREE.IcosahedronGeometry(0.6, 0);
-                const coreMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff });
-                this.core = new THREE.Mesh(coreGeom, coreMat);
-                this.group.add(this.core);
-
                 scene.add(this.group);
 
                 this.group.userData = { health: 150, hitEffect: 0 };
@@ -644,9 +737,9 @@
                 this.hoverOffset = Math.random() * Math.PI * 2;
                 enemies.push(this);
             }
-
             update(delta, time) {
-                const toPlayer = new THREE.Vector3().subVectors(camera.position, this.group.position);
+                let targetPos = player.state === 'driving' ? player.currentCar.group.position : camera.position;
+                const toPlayer = new THREE.Vector3().subVectors(targetPos, this.group.position);
                 toPlayer.y = 0; 
                 const distToPlayer = toPlayer.length();
 
@@ -662,30 +755,22 @@
 
                 this.body.rotation.y += delta;
                 this.body.rotation.x += delta * 0.5;
-                this.core.rotation.y -= delta * 2;
 
-                if (distToPlayer < 2.5 && Math.random() < 0.1 && !player.godmode) {
+                if (distToPlayer < 3 && Math.random() < 0.1 && !player.godmode) {
                     player.health -= 15;
-                    if (player.health <= 0 && !player.isDead) endGame();
                 }
 
                 if (this.group.userData.hitEffect > 0) {
-                    this.bodyMat.color.setHex(0xffffff);
-                    this.bodyMat.wireframe = false;
-                    this.group.userData.hitEffect--;
+                    this.bodyMat.color.setHex(0xffffff); this.bodyMat.wireframe = false; this.group.userData.hitEffect--;
                 } else {
-                    this.bodyMat.color.setHex(0xff0055);
-                    this.bodyMat.wireframe = true;
+                    this.bodyMat.color.setHex(0xff0055); this.bodyMat.wireframe = true;
                 }
             }
         }
 
         function removeEnemy(enemyGroup) {
             const index = enemies.findIndex(e => e.group === enemyGroup);
-            if (index > -1) {
-                scene.remove(enemyGroup);
-                enemies.splice(index, 1);
-            }
+            if (index > -1) { scene.remove(enemyGroup); enemies.splice(index, 1); }
         }
 
         function spawnEnemy() {
@@ -706,7 +791,7 @@
                 setTimeout(() => cheatInput.focus(), 10);
             } else {
                 cheatConsole.style.display = 'none';
-                renderer.domElement.requestPointerLock();
+                if(!isShopOpen) renderer.domElement.requestPointerLock();
             }
         }
 
@@ -714,53 +799,28 @@
             if (e.key === 'Enter') {
                 const cmd = cheatInput.value.trim().toLowerCase();
                 if(cmd === 'godmode' || cmd === 'iddqd') {
-                    player.godmode = !player.godmode;
-                    addKillMessage(`SYS: GODMODE ${player.godmode ? 'ON' : 'OFF'}`);
+                    player.godmode = !player.godmode; addKillMessage(`SYS: GODMODE ${player.godmode ? 'ON' : 'OFF'}`);
                 } else if(cmd === 'ammo' || cmd === 'idkfa') {
-                    player.infiniteAmmo = !player.infiniteAmmo;
-                    if(player.infiniteAmmo) player.ammo = 9999;
-                    addKillMessage(`SYS: INF AMMO ${player.infiniteAmmo ? 'ON' : 'OFF'}`);
-                } else if(cmd === 'sonic') {
-                    player.speedMultiplier = player.speedMultiplier === 1 ? 2.5 : 1;
-                    addKillMessage(`SYS: SPEED x${player.speedMultiplier}`);
-                } else if(cmd === 'spawn') {
-                    spawnEnemy();
-                    addKillMessage('SYS: ENTITY FORCED');
-                } else if(cmd === 'heal') {
-                    player.health = player.maxHealth;
-                    addKillMessage('SYS: INTEGRITY RESTORED');
-                } else if(cmd === 'money') {
-                    totalCredits += 5000;
-                    localStorage.setItem('synthPurge_credits', totalCredits);
-                    document.getElementById('hud-credits').textContent = totalCredits;
-                    addKillMessage('SYS: CREDITS INJECTED');
+                    player.infiniteAmmo = !player.infiniteAmmo; if(player.infiniteAmmo) player.ammo = 9999; addKillMessage(`SYS: INF AMMO ${player.infiniteAmmo ? 'ON' : 'OFF'}`);
+                } else if(cmd === 'noclip') {
+                    player.noclip = !player.noclip; addKillMessage(`SYS: NOCLIP ${player.noclip ? 'ON' : 'OFF'}`);
+                } else if(cmd === 'money' || cmd === 'rich') {
+                    totalCredits += 10000; localStorage.setItem('synthPurge_credits', totalCredits); document.getElementById('hud-credits').textContent = totalCredits; addKillMessage('SYS: 10K CREDITS INJECTED');
+                } else if(cmd === 'car') {
+                    const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
+                    new Car(camera.position.x + camDir.x * 5, camera.position.z + camDir.z * 5);
+                    addKillMessage('SYS: VEHICLE DISPATCHED');
                 } else if(cmd === 'help') {
                     window.open('cheats.html', '_blank');
-                } else if(cmd !== '') {
-                    addKillMessage('SYS: INVALID SYNTAX');
-                }
+                } else if(cmd !== '') { addKillMessage('SYS: INVALID SYNTAX'); }
                 toggleCheatConsole();
             }
         });
 
         function addKillMessage(msg) {
             const feed = document.getElementById('kill-feed');
-            const div = document.createElement('div');
-            div.className = 'kill-message';
-            div.textContent = msg;
-            feed.appendChild(div);
-            setTimeout(() => div.remove(), 4000);
-        }
-
-        function endGame() {
-            player.isDead = true;
-            document.exitPointerLock();
-            document.getElementById('hud').style.display = 'none';
-            document.getElementById('crosshair').style.display = 'none';
-            document.getElementById('instructions').style.display = 'none';
-            document.getElementById('game-over').style.display = 'block';
-            document.getElementById('final-score').textContent = player.sessionCredits;
-            document.getElementById('kill-count').textContent = player.kills;
+            const div = document.createElement('div'); div.className = 'kill-message'; div.textContent = msg;
+            feed.appendChild(div); setTimeout(() => div.remove(), 4000);
         }
 
         let lastTime = 0;
@@ -771,55 +831,96 @@
             lastTime = now;
             const timeSec = now / 1000;
 
-            if (player.isDead || !gameActive) return;
+            if (player.isDead || !gameActive || isShopOpen) return;
 
-            const moveDir = new THREE.Vector3();
-            if (keys['w']) moveDir.z += 1;
-            if (keys['s']) moveDir.z -= 1;
-            if (keys['a']) moveDir.x += 1;
-            if (keys['d']) moveDir.x -= 1;
+            interactTarget = null;
+            document.getElementById('interaction-prompt').style.display = 'none';
 
-            if (moveDir.length() > 0) {
-                moveDir.normalize();
-                const camDir = new THREE.Vector3();
-                camera.getWorldDirection(camDir);
-                const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), camDir).normalize();
-                const forward = new THREE.Vector3(camDir.x, 0, camDir.z).normalize();
+            if (player.state === 'walking') {
+                const moveDir = new THREE.Vector3();
+                
+                if (keys['w']) moveDir.z += 1;
+                if (keys['s']) moveDir.z -= 1;
+                if (keys['a']) moveDir.x += 1;
+                if (keys['d']) moveDir.x -= 1;
 
-                const speed = 12 * player.speedMultiplier;
-                player.velocity.x = (right.x * moveDir.x + forward.x * moveDir.z) * speed;
-                player.velocity.z = (right.z * moveDir.x + forward.z * moveDir.z) * speed;
-            } else {
-                player.velocity.x *= 0.75; 
-                player.velocity.z *= 0.75;
+                if (moveDir.length() > 0) {
+                    moveDir.normalize();
+                    const camDir = new THREE.Vector3();
+                    camera.getWorldDirection(camDir);
+                    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), camDir).normalize();
+                    const forward = new THREE.Vector3(camDir.x, 0, camDir.z).normalize();
+
+                    const speed = 12 * player.speedMultiplier;
+                    player.velocity.x = (right.x * moveDir.x + forward.x * moveDir.z) * speed;
+                    player.velocity.z = (right.z * moveDir.x + forward.z * moveDir.z) * speed;
+                } else {
+                    player.velocity.x *= 0.75; 
+                    player.velocity.z *= 0.75;
+                }
+
+                if (!player.noclip) {
+                    player.velocity.y -= 30 * delta;
+                    camera.position.y += player.velocity.y * delta;
+                    if (camera.position.y <= 1.8) { camera.position.y = 1.8; player.velocity.y = 0; player.grounded = true; }
+                    else { player.grounded = false; }
+                } else {
+                    if (keys[' ']) camera.position.y += 10 * delta;
+                    if (keys['shift']) camera.position.y -= 10 * delta;
+                }
+
+                if (keys[' '] && player.grounded && !isConsoleOpen && !player.noclip) {
+                    player.velocity.y = 12; keys[' '] = false; 
+                }
+
+                camera.position.x += player.velocity.x * delta;
+                camera.position.z += player.velocity.z * delta;
+
+                camera.rotation.order = 'YXZ';
+                camera.rotation.y = yaw;
+                camera.rotation.x = pitch;
+
+                let nearestDist = 5;
+                carEntities.forEach(car => {
+                    const dist = camera.position.distanceTo(car.group.position);
+                    if (dist < nearestDist) { nearestDist = dist; interactTarget = { type: 'car', obj: car }; }
+                });
+                shopEntities.forEach(shop => {
+                    const dist = camera.position.distanceTo(shop.position);
+                    if (dist < nearestDist) { nearestDist = dist; interactTarget = { type: 'shop', obj: shop }; }
+                });
+                
+                if (interactTarget) document.getElementById('interaction-prompt').style.display = 'block';
+
+            } else if (player.state === 'driving') {
+                const car = player.currentCar;
+                
+                if (keys['w']) car.speed += player.carAccel;
+                if (keys['s']) car.speed -= player.carAccel;
+                
+                car.speed *= 0.95;
+                car.speed = Math.max(-player.carMaxSpeed/2, Math.min(player.carMaxSpeed, car.speed));
+                
+                if (Math.abs(car.speed) > 0.05) {
+                    if (keys['a']) car.angle += 0.05 * Math.sign(car.speed);
+                    if (keys['d']) car.angle -= 0.05 * Math.sign(car.speed);
+                }
+                
+                car.group.rotation.y = car.angle;
+                car.group.position.x += Math.sin(car.angle) * car.speed;
+                car.group.position.z += Math.cos(car.angle) * car.speed;
+                
+                camera.position.x = car.group.position.x - Math.sin(car.angle) * 8;
+                camera.position.z = car.group.position.z - Math.cos(car.angle) * 8;
+                camera.position.y = car.group.position.y + 3;
+                camera.lookAt(car.group.position);
+                yaw = camera.rotation.y;
+
+                const displaySpeed = Math.floor(Math.abs(car.speed) * 60);
+                const displayRpm = Math.floor(Math.abs(car.speed) * 3000 + 1000 + Math.random() * 100);
+                document.getElementById('dash-speed').textContent = displaySpeed;
+                document.getElementById('dash-rpm').textContent = displayRpm;
             }
-
-            player.velocity.y -= 30 * delta;
-            camera.position.y += player.velocity.y * delta;
-            
-            if (camera.position.y <= 1.8) {
-                camera.position.y = 1.8;
-                player.velocity.y = 0;
-                player.grounded = true;
-            } else {
-                player.grounded = false;
-            }
-
-            if (keys[' '] && player.grounded && !isConsoleOpen) {
-                player.velocity.y = 12;
-                playSound('jump');
-                keys[' '] = false; 
-            }
-
-            camera.position.x += player.velocity.x * delta;
-            camera.position.z += player.velocity.z * delta;
-
-            camera.position.x = Math.max(-240, Math.min(240, camera.position.x));
-            camera.position.z = Math.max(-240, Math.min(240, camera.position.z));
-
-            camera.rotation.order = 'YXZ';
-            camera.rotation.y = yaw;
-            camera.rotation.x = pitch;
 
             enemies.forEach(enemy => enemy.update(delta, timeSec));
 

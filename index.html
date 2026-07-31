@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+\<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D FPS Shooter - OVERDRIVE V2</title>
+    <title>3D FPS Shooter - OVERDRIVE V3 (BOSS UPDATE)</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -136,7 +136,7 @@
 
     <div id="main-menu">
         <h1>SYNTH PURGE</h1>
-        <div class="version">OVERDRIVE V2</div>
+        <div class="version">OVERDRIVE V3 // BOSS UPDATE</div>
         <p id="time-status"></p>
         <p id="credits-status">BANKED CREDITS: <span id="menu-credits">0</span></p>
         <button class="main-btn" id="start-btn">ENGAGE</button>
@@ -207,6 +207,7 @@
     <script>
         let totalCredits = parseInt(localStorage.getItem('synthPurge_credits')) || 0;
         document.getElementById('menu-credits').textContent = totalCredits;
+        let waveCount = 1;
 
         const currentHour = new Date().getHours();
         const currentMins = new Date().getMinutes().toString().padStart(2, '0');
@@ -234,7 +235,7 @@
                     const gain = bassCtx.createGain();
                     osc.connect(gain); gain.connect(bassCtx.destination);
                     osc.type = 'sawtooth';
-                    osc.frequency.setValueAtTime(55, bassCtx.currentTime); // Deep Bass A1
+                    osc.frequency.setValueAtTime(55, bassCtx.currentTime); 
                     gain.gain.setValueAtTime(0.15, bassCtx.currentTime);
                     gain.gain.exponentialRampToValueAtTime(0.01, bassCtx.currentTime + 0.15);
                     osc.start(); osc.stop(bassCtx.currentTime + 0.15);
@@ -270,6 +271,13 @@
                 gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+            } else if (type === 'bossDeath') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(50, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(10, audioCtx.currentTime + 2.0);
+                gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 2.0);
+                osc.start(); osc.stop(audioCtx.currentTime + 2.0);
             }
         }
 
@@ -305,7 +313,6 @@
         scene.add(new THREE.AmbientLight(0xffffff, envSettings.ambientLight));
         scene.add(new THREE.HemisphereLight(0x00ffff, 0xff00ff, 0.8));
 
-        // Massive Retro Sun
         const sunGeom = new THREE.CircleGeometry(300, 64);
         const sunMat = new THREE.MeshBasicMaterial({ color: 0xff0055, fog: false, side: THREE.DoubleSide });
         const sun = new THREE.Mesh(sunGeom, sunMat);
@@ -327,7 +334,6 @@
             scene.add(building);
         }
         
-        // City Skyline
         for(let i=0; i<20; i++) {
             const bx = (Math.random()-0.5)*800; const bz = (Math.random()-0.5)*800;
             if(Math.abs(bx) > 100 || Math.abs(bz) > 100) createBuilding(bx, bz, 30+Math.random()*40, 50+Math.random()*150, 30+Math.random()*40);
@@ -349,9 +355,37 @@
             constructor(x, z) {
                 this.group = new THREE.Group();
                 this.group.position.set(x, 0.5, z);
-                this.body = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1, 5), new THREE.MeshStandardMaterial({ color: 0xff00ff, metalness: 0.8, roughness: 0.2 }));
-                this.body.position.y = 0.5;
-                this.group.add(this.body);
+                
+                // Sleek Chassis
+                const chassisMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.1 });
+                const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.6, 4.8), chassisMat);
+                chassis.position.y = 0.5;
+                this.group.add(chassis);
+
+                // Cockpit Glass
+                const glassMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7, emissive: 0x005555 });
+                const glass = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 2.5), glassMat);
+                glass.position.set(0, 1.0, -0.5);
+                this.group.add(glass);
+
+                // Neon Trim
+                const trim = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 5.0), new THREE.MeshBasicMaterial({ color: 0xff00ff }));
+                trim.position.y = 0.2;
+                this.group.add(trim);
+
+                // Wheels with glowing rims
+                const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 16);
+                const wheelMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9 });
+                const neonMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+                const positions = [[-1.2, 0.4, 1.8], [1.2, 0.4, 1.8], [-1.2, 0.4, -1.8], [1.2, 0.4, -1.8]];
+                positions.forEach(p => {
+                    const w = new THREE.Mesh(wheelGeo, wheelMat);
+                    w.rotation.z = Math.PI / 2; w.position.set(...p);
+                    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.22, 16), neonMat);
+                    rim.rotation.z = Math.PI / 2; rim.position.set(...p);
+                    this.group.add(w); this.group.add(rim);
+                });
+
                 scene.add(this.group);
                 carEntities.push(this);
                 this.speed = 0; this.angle = 0; this.yVelocity = 0;
@@ -361,11 +395,12 @@
         new Car(-15, -15);
 
         const particles = [];
-        function spawnExplosion(pos) {
-            for(let i=0; i<20; i++) {
-                const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({color: 0x00ffff}));
+        function spawnExplosion(pos, count = 20, isBoss = false) {
+            const color = isBoss ? 0xff00ff : 0x00ffff;
+            for(let i=0; i<count; i++) {
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({color: color}));
                 mesh.position.copy(pos);
-                mesh.velocity = new THREE.Vector3((Math.random()-0.5)*30, Math.random()*20, (Math.random()-0.5)*30);
+                mesh.velocity = new THREE.Vector3((Math.random()-0.5)*(isBoss?60:30), Math.random()*(isBoss?40:20), (Math.random()-0.5)*(isBoss?60:30));
                 mesh.life = 1.0;
                 scene.add(mesh);
                 particles.push(mesh);
@@ -477,12 +512,22 @@
                     target.userData.health -= (wp.dmg * player.dmgMultiplier);
                     target.userData.hitEffect = 10;
                     if (target.userData.health <= 0) {
-                        spawnExplosion(target.position);
+                        const isBoss = target.userData.isBoss;
+                        spawnExplosion(target.position, isBoss ? 150 : 20, isBoss);
                         removeEnemy(target);
-                        player.kills++; player.ammo += 15; totalCredits += 200;
+                        
+                        if (isBoss) {
+                            playSound('bossDeath');
+                            screenShake = 0.8;
+                            player.kills += 5; player.ammo += 100; totalCredits += 5000;
+                            addKillMessage(`OMEGA CONSTRUCT PURGED [+5000 CR]`);
+                        } else {
+                            player.kills++; player.ammo += 15; totalCredits += 200;
+                            addKillMessage(`ENTITY SHATTERED [+200 CR]`);
+                        }
+                        
                         localStorage.setItem('synthPurge_credits', totalCredits);
                         document.getElementById('hud-credits').textContent = totalCredits;
-                        addKillMessage(`ENTITY SHATTERED [+200 CR]`);
                     }
                 }
             }
@@ -533,7 +578,7 @@
                 this.bodyMat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0xff0055, emissiveIntensity: 0.8, wireframe: true });
                 this.body = new THREE.Mesh(new THREE.OctahedronGeometry(1.5, 0), this.bodyMat);
                 this.group.add(this.body); scene.add(this.group);
-                this.group.userData = { health: 200, hitEffect: 0 };
+                this.group.userData = { health: 200, hitEffect: 0, isBoss: false };
                 this.velocity = new THREE.Vector3(); this.speed = 6 + Math.random() * 4;
                 this.hoverOffset = Math.random() * Math.PI * 2;
                 enemies.push(this);
@@ -560,6 +605,48 @@
                 if (this.group.userData.hitEffect > 0) {
                     this.bodyMat.color.setHex(0xffffff); this.bodyMat.wireframe = false; this.group.userData.hitEffect--;
                 } else { this.bodyMat.color.setHex(0xff0055); this.bodyMat.wireframe = true; }
+            }
+        }
+
+        class Boss {
+            constructor(x, z) {
+                this.group = new THREE.Group(); this.group.position.set(x, 6, z);
+                
+                this.bodyMat = new THREE.MeshStandardMaterial({ color: 0xff00ff, emissive: 0xff0055, emissiveIntensity: 1.5, wireframe: true });
+                this.body = new THREE.Mesh(new THREE.OctahedronGeometry(4, 0), this.bodyMat);
+                
+                this.core = new THREE.Mesh(new THREE.IcosahedronGeometry(2, 0), new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff}));
+                
+                this.group.add(this.body); this.group.add(this.core);
+                scene.add(this.group);
+                
+                this.group.userData = { health: 2500, hitEffect: 0, isBoss: true };
+                this.velocity = new THREE.Vector3(); this.speed = 9;
+                enemies.push(this);
+            }
+            update(delta, time) {
+                let targetPos = player.state === 'driving' ? player.currentCar.group.position : camera.position;
+                const toPlayer = new THREE.Vector3().subVectors(targetPos, this.group.position);
+                toPlayer.y = 0; const distToPlayer = toPlayer.length();
+
+                if (distToPlayer < 150) {
+                    const dir = toPlayer.normalize();
+                    this.velocity.x = dir.x * this.speed; this.velocity.z = dir.z * this.speed;
+                }
+                this.group.position.x += this.velocity.x * delta;
+                this.group.position.z += this.velocity.z * delta;
+                this.group.position.y = 5 + Math.sin(time * 3) * 2;
+
+                this.body.rotation.y += delta * 3; this.body.rotation.x += delta * 1.5;
+                this.core.rotation.y -= delta * 4;
+
+                if (distToPlayer < 6 && Math.random() < 0.2 && !player.godmode) {
+                    player.health -= 50; screenShake = 0.5; playSound('hit');
+                }
+
+                if (this.group.userData.hitEffect > 0) {
+                    this.bodyMat.color.setHex(0xffffff); this.bodyMat.wireframe = false; this.group.userData.hitEffect--;
+                } else { this.bodyMat.color.setHex(0xff00ff); this.bodyMat.wireframe = true; }
             }
         }
 
@@ -590,6 +677,7 @@
                 else if(cmd === 'noclip') { player.noclip = !player.noclip; addKillMessage(`SYS: NOCLIP ${player.noclip ? 'ON' : 'OFF'}`); } 
                 else if(cmd === 'money' || cmd === 'rich') { totalCredits += 10000; localStorage.setItem('synthPurge_credits', totalCredits); document.getElementById('hud-credits').textContent = totalCredits; addKillMessage('SYS: 10K CR INJECTED'); } 
                 else if(cmd === 'car') { const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); new Car(camera.position.x + camDir.x * 5, camera.position.z + camDir.z * 5); addKillMessage('SYS: VEHICLE DISPATCHED'); } 
+                else if(cmd === 'boss') { const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); new Boss(camera.position.x + camDir.x * 20, camera.position.z + camDir.z * 20); addKillMessage('SYS: OMEGA THREAT FORCED'); }
                 else if(cmd === 'help') { window.open('cheats.html', '_blank'); } 
                 else if(cmd !== '') { addKillMessage('SYS: INVALID SYNTAX'); }
                 toggleCheatConsole();
@@ -642,7 +730,6 @@
                     player.velocity.x *= 0.75; player.velocity.z *= 0.75;
                 }
 
-                // DASH MECHANIC
                 if (keys['shift'] && player.dashCooldown <= 0 && moveDir.length() > 0) {
                     player.velocity.x += (right.x * moveDir.x + forward.x * moveDir.z) * 80;
                     player.velocity.z += (right.z * moveDir.x + forward.z * moveDir.z) * 80;
@@ -694,10 +781,9 @@
                 car.group.position.x += Math.sin(car.angle) * car.speed;
                 car.group.position.z += Math.cos(car.angle) * car.speed;
 
-                // CAR HYDRAULICS JUMP
                 car.group.position.y += car.yVelocity * delta;
                 if(car.group.position.y > 0.5) {
-                    car.yVelocity -= 40 * delta; // heavy car gravity
+                    car.yVelocity -= 40 * delta; 
                 } else {
                     car.group.position.y = 0.5; car.yVelocity = 0;
                     if (keys[' ']) { car.yVelocity = 20; playSound('dash'); keys[' '] = false; }
@@ -714,16 +800,26 @@
                 document.getElementById('dash-bar-container').style.display = 'none';
             } else { document.getElementById('dash-bar-container').style.display = 'block'; }
 
-            // Screen Shake processing
             if(screenShake > 0) {
                 camera.rotation.z = (Math.random() - 0.5) * screenShake;
                 screenShake -= delta;
             } else { camera.rotation.z = 0; }
 
             enemies.forEach(enemy => enemy.update(delta, timeSec));
+            
+            // WAVE SPAWNING LOGIC WITH BOSS
             if (enemies.length === 0) {
-                for (let i = 0; i < 10 + Math.floor(player.kills / 2); i++) spawnEnemy();
-                addKillMessage('SYS: ESCALATION DETECTED');
+                waveCount++;
+                if (waveCount % 3 === 0) {
+                    // BOSS WAVE
+                    const angle = Math.random() * Math.PI * 2; 
+                    new Boss(Math.cos(angle) * 80, Math.sin(angle) * 80);
+                    for (let i = 0; i < 5; i++) spawnEnemy();
+                    addKillMessage('SYS: WARNING! OMEGA CONSTRUCT DETECTED');
+                } else {
+                    for (let i = 0; i < 10 + Math.floor(player.kills / 2); i++) spawnEnemy();
+                    addKillMessage(`SYS: ESCALATION - WAVE ${waveCount}`);
+                }
             }
 
             document.getElementById('hud-credits').textContent = totalCredits;

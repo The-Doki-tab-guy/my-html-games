@@ -1,9 +1,9 @@
-\<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D FPS Shooter - OVERDRIVE V3 (BOSS UPDATE)</title>
+    <title>Is duct tape safe for keeping the poopy in?</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -63,8 +63,9 @@
             margin-bottom: 40px;
             font-family: 'Courier New', Courier, monospace;
         }
+        .menu-btn-container { display: flex; gap: 20px; }
         .main-btn {
-            padding: 20px 60px;
+            padding: 20px 40px;
             font-size: 28px;
             background: rgba(255, 0, 255, 0.1);
             color: #fff;
@@ -78,8 +79,23 @@
             background: #f0f;
             color: #000;
             box-shadow: 0 0 40px #f0f;
-            transform: scale(1.1);
+            transform: scale(1.05);
         }
+        
+        #manual-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 5, 16, 0.95);
+            z-index: 4000;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #0ff;
+        }
+        #manual-screen h2 { font-size: 60px; color: #f0f; margin-bottom: 40px; text-shadow: 0 0 20px #f0f; }
+        .manual-content { max-width: 800px; font-size: 20px; line-height: 1.8; background: rgba(0,0,0,0.8); padding: 40px; border: 2px solid #0ff; }
+        .manual-content span { color: #f0f; font-weight: bold; }
 
         #hud { display: none; position: absolute; color: #fff; font-weight: bold; font-family: 'Courier New', monospace; user-select: none; pointer-events: none; width: 100%; height: 100%; z-index: 100; }
         #health-bar-container { position: absolute; bottom: 40px; left: 40px; width: 400px; background: rgba(0, 0, 0, 0.6); border: 2px solid #0ff; padding: 5px; transform: skewX(-15deg); box-shadow: 0 0 20px rgba(0, 255, 255, 0.3); }
@@ -136,10 +152,24 @@
 
     <div id="main-menu">
         <h1>SYNTH PURGE</h1>
-        <div class="version">OVERDRIVE V3 // BOSS UPDATE</div>
+        <div class="version">OVERDRIVE V4 // APEX UPDATE</div>
         <p id="time-status"></p>
         <p id="credits-status">BANKED CREDITS: <span id="menu-credits">0</span></p>
-        <button class="main-btn" id="start-btn">ENGAGE</button>
+        <div class="menu-btn-container">
+            <button class="main-btn" id="start-btn">ENGAGE</button>
+            <button class="main-btn" onclick="document.getElementById('manual-screen').style.display='flex'">MANUAL</button>
+        </div>
+    </div>
+    
+    <div id="manual-screen">
+        <h2>SYSTEM MANUAL</h2>
+        <div class="manual-content">
+            <p><span>[ INFANTRY ]</span><br>WASD to Move, SPACE to Jump, SHIFT to Dash. LEFT CLICK to Shoot. 1-2-3 to select weapons.</p><br>
+            <p><span>[ VEHICLES ]</span><br>Look at vehicle and press E to Enter/Exit. W/S to Accelerate/Brake. A/D to Steer. SPACE for Hydraulics.</p><br>
+            <p><span>[ AIRCRAFT ]</span><br>Look at aircraft and press E to Enter/Exit. SPACE to Increase Thrust, SHIFT to Decrease Thrust.<br>S = Pitch Up (Climb) | W = Pitch Down (Dive)<br>A/D = Roll & Turn.<br>Hold LEFT CLICK to fire aircraft weapons.</p><br>
+            <p><span>[ WEAPONS ]</span><br>V-BLASTER features rapid automatic fire (Hold Left Click). Railgun and Pulse require precision.</p>
+        </div>
+        <button class="main-btn" onclick="document.getElementById('manual-screen').style.display='none'" style="margin-top:40px; border-color:#f00; color:#f00;">CLOSE</button>
     </div>
     
     <div id="hud">
@@ -148,7 +178,7 @@
         <div id="health-bar-container"><div id="health-fill"></div></div>
         <div id="dash-bar-container"><div id="dash-fill"></div></div>
         <div id="weapon-info">
-            <div id="weapon-name">BLASTER</div>
+            <div id="weapon-name">V-BLASTER</div>
             <div id="ammo-counter">120</div>
         </div>
         
@@ -178,7 +208,7 @@
         <div style="color: #f0f; font-size: 20px; margin-top: 10px;">CREDITS: <span id="shop-credits-display">0</span></div>
         <div class="shop-items">
             <div class="shop-card">
-                <h3>OVERCHARGE BLASTER</h3>
+                <h3>OVERCHARGE</h3>
                 <p>Increase base weapon damage by 50%.</p>
                 <div class="cost">1000 CR</div>
                 <button onclick="buyInGameUpgrade('dmg', 1000)">PURCHASE</button>
@@ -355,25 +385,14 @@
             constructor(x, z) {
                 this.group = new THREE.Group();
                 this.group.position.set(x, 0.5, z);
-                
-                // Sleek Chassis
                 const chassisMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.1 });
                 const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.6, 4.8), chassisMat);
-                chassis.position.y = 0.5;
-                this.group.add(chassis);
-
-                // Cockpit Glass
+                chassis.position.y = 0.5; this.group.add(chassis);
                 const glassMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7, emissive: 0x005555 });
                 const glass = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 2.5), glassMat);
-                glass.position.set(0, 1.0, -0.5);
-                this.group.add(glass);
-
-                // Neon Trim
+                glass.position.set(0, 1.0, -0.5); this.group.add(glass);
                 const trim = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 5.0), new THREE.MeshBasicMaterial({ color: 0xff00ff }));
-                trim.position.y = 0.2;
-                this.group.add(trim);
-
-                // Wheels with glowing rims
+                trim.position.y = 0.2; this.group.add(trim);
                 const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 16);
                 const wheelMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9 });
                 const neonMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
@@ -385,14 +404,32 @@
                     rim.rotation.z = Math.PI / 2; rim.position.set(...p);
                     this.group.add(w); this.group.add(rim);
                 });
-
-                scene.add(this.group);
-                carEntities.push(this);
+                scene.add(this.group); carEntities.push(this);
                 this.speed = 0; this.angle = 0; this.yVelocity = 0;
             }
         }
         new Car(10, 10);
         new Car(-15, -15);
+
+        const planeEntities = [];
+        class Plane {
+            constructor(x, z) {
+                this.group = new THREE.Group();
+                this.group.position.set(x, 1, z);
+                const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 5, 8), new THREE.MeshStandardMaterial({color: 0x111122, metalness: 0.9}));
+                fuselage.rotation.x = Math.PI / 2;
+                const wings = new THREE.Mesh(new THREE.BoxGeometry(8, 0.1, 2), new THREE.MeshStandardMaterial({color: 0x00ffff}));
+                const tail = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 1), new THREE.MeshStandardMaterial({color: 0xff00ff}));
+                tail.position.set(0, 0, -2.2);
+                const fin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 1.5), new THREE.MeshStandardMaterial({color: 0xff00ff}));
+                fin.position.set(0, 0.8, -2.2);
+                this.group.add(fuselage); this.group.add(wings); this.group.add(tail); this.group.add(fin);
+                scene.add(this.group); planeEntities.push(this);
+                this.speed = 0; this.pitch = 0; this.yaw = 0; this.roll = 0;
+            }
+        }
+        new Plane(25, 25);
+        new Plane(-30, 10);
 
         const particles = [];
         function spawnExplosion(pos, count = 20, isBoss = false) {
@@ -408,13 +445,14 @@
         }
 
         const weapons = [
-            { name: 'V-BLASTER', dmg: 35, cd: 120, cost: 1, pitch: 900, color: '#0ff' },
+            { name: 'V-BLASTER', dmg: 35, cd: 200, cost: 1, pitch: 900, color: '#0ff' },
             { name: 'HEAVY PULSE', dmg: 90, cd: 500, cost: 5, pitch: 300, color: '#f0f' },
             { name: 'RAILGUN', dmg: 250, cd: 1200, cost: 15, pitch: 1800, color: '#fff' }
         ];
 
         let gameActive = false;
         let screenShake = 0;
+        let isMouseDown = false;
         
         const player = {
             velocity: new THREE.Vector3(), grounded: false,
@@ -422,7 +460,7 @@
             speedMultiplier: 1.5, dmgMultiplier: 1.0, dashCooldown: 0,
             carAccel: 0.08, carMaxSpeed: 2.5,
             godmode: false, infiniteAmmo: false, noclip: false, isDead: false,
-            weaponIndex: 0, state: 'walking', currentCar: null
+            weaponIndex: 0, state: 'walking', currentCar: null, currentPlane: null
         };
 
         function updateWeaponUI() {
@@ -458,7 +496,7 @@
             if (e.key.toLowerCase() === 'e' && !isConsoleOpen && !isShopOpen) handleInteraction();
             if (!isConsoleOpen && !isShopOpen) {
                 keys[e.key.toLowerCase()] = true;
-                if (player.state === 'walking') {
+                if (player.state === 'walking' || player.state === 'flying') {
                     if (e.key === '1' && player.weaponIndex !== 0) { player.weaponIndex = 0; updateWeaponUI(); }
                     if (e.key === '2' && player.weaponIndex !== 1) { player.weaponIndex = 1; updateWeaponUI(); }
                     if (e.key === '3' && player.weaponIndex !== 2) { player.weaponIndex = 2; updateWeaponUI(); }
@@ -470,14 +508,22 @@
         let pitch = 0, yaw = 0;
         document.addEventListener('mousemove', (e) => {
             if (gameActive && document.pointerLockElement === renderer.domElement && !player.isDead) {
-                yaw -= e.movementX * 0.002;
                 if (player.state === 'walking') {
+                    yaw -= e.movementX * 0.002;
                     pitch -= e.movementY * 0.002;
                     pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
-                } else { pitch = 0; }
+                } else if (player.state === 'driving') {
+                    yaw -= e.movementX * 0.002;
+                    pitch = 0;
+                } else if (player.state === 'flying') {
+                }
             }
         });
 
+        document.addEventListener('mousedown', (e) => {
+            if (document.pointerLockElement === renderer.domElement) isMouseDown = true;
+        });
+        document.addEventListener('mouseup', () => { isMouseDown = false; });
         document.addEventListener('click', () => {
             if (gameActive && !isConsoleOpen && !isShopOpen && !player.isDead && document.pointerLockElement !== renderer.domElement) {
                 renderer.domElement.requestPointerLock();
@@ -485,24 +531,18 @@
         });
 
         let lastShotTime = 0;
-        document.addEventListener('mousedown', () => {
-            if (!gameActive || document.pointerLockElement !== renderer.domElement || player.isDead || isConsoleOpen || isShopOpen || player.state === 'driving') return;
-            const now = Date.now(); const wp = weapons[player.weaponIndex];
-            if (now - lastShotTime > wp.cd && (player.ammo >= wp.cost || player.infiniteAmmo)) {
-                lastShotTime = now;
-                if (!player.infiniteAmmo) player.ammo -= wp.cost;
-                playSound('shoot', wp.pitch);
-                screenShake = 0.05;
-                flashLight.intensity = 3; flashLight.color.set(wp.color);
-                setTimeout(() => flashLight.intensity = 0, 50);
-                document.getElementById('crosshair').classList.add('shooting');
-                setTimeout(() => document.getElementById('crosshair').classList.remove('shooting'), 60);
-                shoot(wp);
-            }
-        });
 
         function shoot(wp) {
-            const raycaster = new THREE.Raycaster(camera.position, camera.getWorldDirection(new THREE.Vector3()));
+            let rayOrigin = camera.position;
+            let rayDir = new THREE.Vector3();
+            camera.getWorldDirection(rayDir);
+
+            if (player.state === 'flying') {
+                rayOrigin = player.currentPlane.group.position.clone();
+                player.currentPlane.group.getWorldDirection(rayDir);
+            }
+
+            const raycaster = new THREE.Raycaster(rayOrigin, rayDir);
             const intersects = raycaster.intersectObjects(enemies.map(e => e.group), true);
             if (intersects.length > 0) {
                 let target = intersects[0].object;
@@ -513,13 +553,15 @@
                     target.userData.hitEffect = 10;
                     if (target.userData.health <= 0) {
                         const isBoss = target.userData.isBoss;
-                        spawnExplosion(target.position, isBoss ? 150 : 20, isBoss);
+                        const isFinal = target.userData.isFinalBoss;
+                        spawnExplosion(target.position, isFinal ? 300 : (isBoss ? 150 : 20), isBoss || isFinal);
                         removeEnemy(target);
                         
-                        if (isBoss) {
-                            playSound('bossDeath');
-                            screenShake = 0.8;
-                            player.kills += 5; player.ammo += 100; totalCredits += 5000;
+                        if (isFinal) {
+                            playSound('bossDeath'); screenShake = 1.5; player.kills += 50; player.ammo += 500; totalCredits += 25000;
+                            addKillMessage(`NEXUS APEX DESTROYED [+25000 CR]`);
+                        } else if (isBoss) {
+                            playSound('bossDeath'); screenShake = 0.8; player.kills += 5; player.ammo += 100; totalCredits += 5000;
                             addKillMessage(`OMEGA CONSTRUCT PURGED [+5000 CR]`);
                         } else {
                             player.kills++; player.ammo += 15; totalCredits += 200;
@@ -542,13 +584,25 @@
                 document.getElementById('crosshair').style.display = 'block';
                 return;
             }
+            if (player.state === 'flying') {
+                player.state = 'walking';
+                camera.position.copy(player.currentPlane.group.position); camera.position.y += 1.6; camera.position.x += 4; 
+                player.currentPlane = null;
+                document.getElementById('dashboard').style.display = 'none';
+                document.getElementById('crosshair').style.display = 'block';
+                return;
+            }
             if (interactTarget) {
                 if (interactTarget.type === 'car') {
                     player.state = 'driving'; player.currentCar = interactTarget.obj;
                     document.getElementById('dashboard').style.display = 'flex';
                     document.getElementById('crosshair').style.display = 'none';
+                } else if (interactTarget.type === 'plane') {
+                    player.state = 'flying'; player.currentPlane = interactTarget.obj;
+                    document.getElementById('dashboard').style.display = 'flex';
+                    document.getElementById('crosshair').style.display = 'block'; 
                 } else if (interactTarget.type === 'shop') {
-                    isShopOpen = true; document.exitPointerLock();
+                    isShopOpen = true; isMouseDown = false; document.exitPointerLock();
                     document.getElementById('in-game-shop').style.display = 'flex';
                     document.getElementById('shop-credits-display').textContent = totalCredits;
                 }
@@ -584,11 +638,14 @@
                 enemies.push(this);
             }
             update(delta, time) {
-                let targetPos = player.state === 'driving' ? player.currentCar.group.position : camera.position;
+                let targetPos = camera.position;
+                if(player.state === 'driving') targetPos = player.currentCar.group.position;
+                if(player.state === 'flying') targetPos = player.currentPlane.group.position;
+                
                 const toPlayer = new THREE.Vector3().subVectors(targetPos, this.group.position);
                 toPlayer.y = 0; const distToPlayer = toPlayer.length();
 
-                if (distToPlayer < 90) {
+                if (distToPlayer < 120) {
                     const dir = toPlayer.normalize();
                     this.velocity.x = dir.x * this.speed; this.velocity.z = dir.z * this.speed;
                 }
@@ -598,7 +655,7 @@
 
                 this.body.rotation.y += delta * 2; this.body.rotation.x += delta;
 
-                if (distToPlayer < 3 && Math.random() < 0.1 && !player.godmode) {
+                if (distToPlayer < 4 && Math.random() < 0.1 && !player.godmode) {
                     player.health -= 20; screenShake = 0.2; playSound('hit');
                 }
 
@@ -611,25 +668,24 @@
         class Boss {
             constructor(x, z) {
                 this.group = new THREE.Group(); this.group.position.set(x, 6, z);
-                
                 this.bodyMat = new THREE.MeshStandardMaterial({ color: 0xff00ff, emissive: 0xff0055, emissiveIntensity: 1.5, wireframe: true });
                 this.body = new THREE.Mesh(new THREE.OctahedronGeometry(4, 0), this.bodyMat);
-                
                 this.core = new THREE.Mesh(new THREE.IcosahedronGeometry(2, 0), new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff}));
-                
                 this.group.add(this.body); this.group.add(this.core);
                 scene.add(this.group);
-                
                 this.group.userData = { health: 2500, hitEffect: 0, isBoss: true };
                 this.velocity = new THREE.Vector3(); this.speed = 9;
                 enemies.push(this);
             }
             update(delta, time) {
-                let targetPos = player.state === 'driving' ? player.currentCar.group.position : camera.position;
+                let targetPos = camera.position;
+                if(player.state === 'driving') targetPos = player.currentCar.group.position;
+                if(player.state === 'flying') targetPos = player.currentPlane.group.position;
+
                 const toPlayer = new THREE.Vector3().subVectors(targetPos, this.group.position);
                 toPlayer.y = 0; const distToPlayer = toPlayer.length();
 
-                if (distToPlayer < 150) {
+                if (distToPlayer < 200) {
                     const dir = toPlayer.normalize();
                     this.velocity.x = dir.x * this.speed; this.velocity.z = dir.z * this.speed;
                 }
@@ -640,7 +696,7 @@
                 this.body.rotation.y += delta * 3; this.body.rotation.x += delta * 1.5;
                 this.core.rotation.y -= delta * 4;
 
-                if (distToPlayer < 6 && Math.random() < 0.2 && !player.godmode) {
+                if (distToPlayer < 8 && Math.random() < 0.2 && !player.godmode) {
                     player.health -= 50; screenShake = 0.5; playSound('hit');
                 }
 
@@ -650,13 +706,54 @@
             }
         }
 
+        class FinalBoss {
+            constructor(x, z) {
+                this.group = new THREE.Group(); this.group.position.set(x, 15, z);
+                this.bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffaa00, emissiveIntensity: 2.0, wireframe: true });
+                this.body = new THREE.Mesh(new THREE.TorusKnotGeometry(6, 1.5, 100, 16), this.bodyMat);
+                this.core = new THREE.Mesh(new THREE.SphereGeometry(4, 32, 32), new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xff0000}));
+                this.group.add(this.body); this.group.add(this.core);
+                scene.add(this.group);
+                this.group.userData = { health: 15000, hitEffect: 0, isBoss: true, isFinalBoss: true };
+                this.velocity = new THREE.Vector3(); this.speed = 12;
+                enemies.push(this);
+            }
+            update(delta, time) {
+                let targetPos = camera.position;
+                if(player.state === 'driving') targetPos = player.currentCar.group.position;
+                if(player.state === 'flying') targetPos = player.currentPlane.group.position;
+
+                const toPlayer = new THREE.Vector3().subVectors(targetPos, this.group.position);
+                toPlayer.y = 0; const distToPlayer = toPlayer.length();
+
+                if (distToPlayer < 300) {
+                    const dir = toPlayer.normalize();
+                    this.velocity.x = dir.x * this.speed; this.velocity.z = dir.z * this.speed;
+                }
+                this.group.position.x += this.velocity.x * delta;
+                this.group.position.z += this.velocity.z * delta;
+                this.group.position.y = 12 + Math.sin(time * 2) * 4;
+
+                this.body.rotation.y -= delta * 2; this.body.rotation.x += delta * 2;
+                this.core.rotation.y += delta * 5;
+
+                if (distToPlayer < 12 && Math.random() < 0.3 && !player.godmode) {
+                    player.health -= 80; screenShake = 0.8; playSound('hit');
+                }
+
+                if (this.group.userData.hitEffect > 0) {
+                    this.bodyMat.color.setHex(0xffffff); this.bodyMat.wireframe = false; this.group.userData.hitEffect--;
+                } else { this.bodyMat.color.setHex(0xffaa00); this.bodyMat.wireframe = true; }
+            }
+        }
+
         function removeEnemy(enemyGroup) {
             const index = enemies.findIndex(e => e.group === enemyGroup);
             if (index > -1) { scene.remove(enemyGroup); enemies.splice(index, 1); }
         }
 
         function spawnEnemy() {
-            const angle = Math.random() * Math.PI * 2; const distance = 50 + Math.random() * 80;
+            const angle = Math.random() * Math.PI * 2; const distance = 60 + Math.random() * 80;
             new Enemy(Math.cos(angle) * distance, Math.sin(angle) * distance);
         }
 
@@ -677,7 +774,9 @@
                 else if(cmd === 'noclip') { player.noclip = !player.noclip; addKillMessage(`SYS: NOCLIP ${player.noclip ? 'ON' : 'OFF'}`); } 
                 else if(cmd === 'money' || cmd === 'rich') { totalCredits += 10000; localStorage.setItem('synthPurge_credits', totalCredits); document.getElementById('hud-credits').textContent = totalCredits; addKillMessage('SYS: 10K CR INJECTED'); } 
                 else if(cmd === 'car') { const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); new Car(camera.position.x + camDir.x * 5, camera.position.z + camDir.z * 5); addKillMessage('SYS: VEHICLE DISPATCHED'); } 
+                else if(cmd === 'plane') { const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); new Plane(camera.position.x + camDir.x * 10, camera.position.z + camDir.z * 10); addKillMessage('SYS: AIRCRAFT DISPATCHED'); }
                 else if(cmd === 'boss') { const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); new Boss(camera.position.x + camDir.x * 20, camera.position.z + camDir.z * 20); addKillMessage('SYS: OMEGA THREAT FORCED'); }
+                else if(cmd === 'finalboss') { const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); new FinalBoss(camera.position.x + camDir.x * 30, camera.position.z + camDir.z * 30); addKillMessage('SYS: NEXUS APEX FORCED'); }
                 else if(cmd === 'help') { window.open('cheats.html', '_blank'); } 
                 else if(cmd !== '') { addKillMessage('SYS: INVALID SYNTAX'); }
                 toggleCheatConsole();
@@ -697,11 +796,28 @@
             const delta = Math.min((now - lastTime) / 1000, 0.1);
             lastTime = now; const timeSec = now / 1000;
 
-            if (player.isDead || !gameActive || isShopOpen) return;
+            if (player.isDead || !gameActive || isShopOpen || isConsoleOpen) {
+                isMouseDown = false;
+                if(player.isDead) return;
+            }
+
+            if (isMouseDown && (player.state === 'walking' || player.state === 'flying')) {
+                const wp = weapons[player.weaponIndex];
+                if (now - lastShotTime > wp.cd && (player.ammo >= wp.cost || player.infiniteAmmo)) {
+                    lastShotTime = now;
+                    if (!player.infiniteAmmo) player.ammo -= wp.cost;
+                    playSound('shoot', wp.pitch);
+                    screenShake = player.state === 'flying' ? 0.02 : 0.05;
+                    flashLight.intensity = 3; flashLight.color.set(wp.color);
+                    setTimeout(() => flashLight.intensity = 0, 50);
+                    document.getElementById('crosshair').classList.add('shooting');
+                    setTimeout(() => document.getElementById('crosshair').classList.remove('shooting'), 60);
+                    shoot(wp);
+                }
+            }
 
             interactTarget = null; document.getElementById('interaction-prompt').style.display = 'none';
 
-            // Particles Update
             for(let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 p.position.addScaledVector(p.velocity, delta);
@@ -759,8 +875,9 @@
                 camera.rotation.y = yaw;
                 camera.rotation.x = pitch;
 
-                let nearestDist = 6;
+                let nearestDist = 8;
                 carEntities.forEach(car => { const dist = camera.position.distanceTo(car.group.position); if (dist < nearestDist) { nearestDist = dist; interactTarget = { type: 'car', obj: car }; } });
+                planeEntities.forEach(plane => { const dist = camera.position.distanceTo(plane.group.position); if (dist < nearestDist) { nearestDist = dist; interactTarget = { type: 'plane', obj: plane }; } });
                 shopEntities.forEach(shop => { const dist = camera.position.distanceTo(shop.position); if (dist < nearestDist) { nearestDist = dist; interactTarget = { type: 'shop', obj: shop }; } });
                 if (interactTarget) document.getElementById('interaction-prompt').style.display = 'block';
 
@@ -798,20 +915,59 @@
                 document.getElementById('dash-speed').textContent = Math.floor(Math.abs(car.speed) * 70);
                 document.getElementById('dash-rpm').textContent = Math.floor(Math.abs(car.speed) * 3500 + 1000 + Math.random() * 200);
                 document.getElementById('dash-bar-container').style.display = 'none';
-            } else { document.getElementById('dash-bar-container').style.display = 'block'; }
+                
+            } else if (player.state === 'flying') {
+                const p = player.currentPlane;
+                
+                if (keys['space']) p.speed += 20 * delta;
+                if (keys['shift']) p.speed -= 20 * delta;
+                p.speed *= 0.98;
+                p.speed = Math.max(0, Math.min(80, p.speed));
+                
+                if (keys['s']) p.pitch += 1.5 * delta; 
+                if (keys['w']) p.pitch -= 1.5 * delta; 
+                if (keys['a']) { p.roll += 2.5 * delta; p.yaw += 1.2 * delta; }
+                if (keys['d']) { p.roll -= 2.5 * delta; p.yaw -= 1.2 * delta; }
+
+                if (!keys['a'] && !keys['d']) p.roll *= 0.95; 
+
+                p.group.rotation.set(p.pitch, p.yaw, p.roll, 'YXZ');
+                
+                const forward = new THREE.Vector3();
+                p.group.getWorldDirection(forward);
+                p.group.position.addScaledVector(forward, p.speed * delta);
+                
+                if (p.group.position.y < 1.5) {
+                    p.group.position.y = 1.5;
+                    p.pitch = Math.max(0, p.pitch); 
+                }
+                
+                const camOffset = new THREE.Vector3(0, 4, -12).applyQuaternion(p.group.quaternion);
+                camera.position.copy(p.group.position).add(camOffset);
+                camera.lookAt(p.group.position);
+                yaw = camera.rotation.y;
+                pitch = camera.rotation.x;
+
+                document.getElementById('dash-speed').textContent = Math.floor(p.speed * 8);
+                document.getElementById('dash-rpm').textContent = Math.floor(p.speed * 80 + 2000 + Math.random() * 100);
+                document.getElementById('dash-bar-container').style.display = 'none';
+            }
 
             if(screenShake > 0) {
                 camera.rotation.z = (Math.random() - 0.5) * screenShake;
                 screenShake -= delta;
-            } else { camera.rotation.z = 0; }
+            } else if (player.state !== 'flying') { camera.rotation.z = 0; }
 
             enemies.forEach(enemy => enemy.update(delta, timeSec));
             
-            // WAVE SPAWNING LOGIC WITH BOSS
             if (enemies.length === 0) {
                 waveCount++;
-                if (waveCount % 3 === 0) {
-                    // BOSS WAVE
+                if (waveCount % 10 === 0) {
+                    const angle = Math.random() * Math.PI * 2; 
+                    new FinalBoss(Math.cos(angle) * 120, Math.sin(angle) * 120);
+                    for (let i = 0; i < 8; i++) spawnEnemy();
+                    addKillMessage('SYS: CRITICAL WARNING! NEXUS APEX DETECTED');
+                } else if (waveCount % 3 === 0) {
                     const angle = Math.random() * Math.PI * 2; 
                     new Boss(Math.cos(angle) * 80, Math.sin(angle) * 80);
                     for (let i = 0; i < 5; i++) spawnEnemy();

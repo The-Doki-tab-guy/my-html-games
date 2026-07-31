@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Is duct tape safe for keeping the poopy in?</title>
+    <title>3D FPS Shooter - OVERDRIVE V4 (APEX UPDATE)</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -415,7 +415,7 @@
         class Plane {
             constructor(x, z) {
                 this.group = new THREE.Group();
-                this.group.position.set(x, 1, z);
+                this.group.position.set(x, 1.5, z);
                 const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 5, 8), new THREE.MeshStandardMaterial({color: 0x111122, metalness: 0.9}));
                 fuselage.rotation.x = Math.PI / 2;
                 const wings = new THREE.Mesh(new THREE.BoxGeometry(8, 0.1, 2), new THREE.MeshStandardMaterial({color: 0x00ffff}));
@@ -515,7 +515,6 @@
                 } else if (player.state === 'driving') {
                     yaw -= e.movementX * 0.002;
                     pitch = 0;
-                } else if (player.state === 'flying') {
                 }
             }
         });
@@ -586,7 +585,7 @@
             }
             if (player.state === 'flying') {
                 player.state = 'walking';
-                camera.position.copy(player.currentPlane.group.position); camera.position.y += 1.6; camera.position.x += 4; 
+                camera.position.copy(player.currentPlane.group.position); camera.position.y += 1.6; camera.position.x += 6; 
                 player.currentPlane = null;
                 document.getElementById('dashboard').style.display = 'none';
                 document.getElementById('crosshair').style.display = 'block';
@@ -919,30 +918,33 @@
             } else if (player.state === 'flying') {
                 const p = player.currentPlane;
                 
-                if (keys['space']) p.speed += 20 * delta;
-                if (keys['shift']) p.speed -= 20 * delta;
-                p.speed *= 0.98;
-                p.speed = Math.max(0, Math.min(80, p.speed));
+                // Flight Thrust
+                if (keys[' ']) p.speed += 40 * delta;
+                if (keys['shift']) p.speed -= 40 * delta;
+                p.speed *= 0.99;
+                p.speed = Math.max(0, Math.min(120, p.speed));
                 
-                if (keys['s']) p.pitch += 1.5 * delta; 
-                if (keys['w']) p.pitch -= 1.5 * delta; 
-                if (keys['a']) { p.roll += 2.5 * delta; p.yaw += 1.2 * delta; }
-                if (keys['d']) { p.roll -= 2.5 * delta; p.yaw -= 1.2 * delta; }
+                // Pitch and Roll Control
+                if (keys['s']) p.pitch += 2.0 * delta; 
+                if (keys['w']) p.pitch -= 2.0 * delta; 
+                if (keys['a']) { p.roll += 3.0 * delta; p.yaw += 1.5 * delta; }
+                if (keys['d']) { p.roll -= 3.0 * delta; p.yaw -= 1.5 * delta; }
 
-                if (!keys['a'] && !keys['d']) p.roll *= 0.95; 
+                if (!keys['a'] && !keys['d']) p.roll *= 0.92; 
 
                 p.group.rotation.set(p.pitch, p.yaw, p.roll, 'YXZ');
                 
-                const forward = new THREE.Vector3();
-                p.group.getWorldDirection(forward);
+                // Proper Forward Velocity Vector Calculation
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(p.group.quaternion);
                 p.group.position.addScaledVector(forward, p.speed * delta);
                 
                 if (p.group.position.y < 1.5) {
                     p.group.position.y = 1.5;
                     p.pitch = Math.max(0, p.pitch); 
                 }
+                if (p.group.position.y > 400) p.group.position.y = 400;
                 
-                const camOffset = new THREE.Vector3(0, 4, -12).applyQuaternion(p.group.quaternion);
+                const camOffset = new THREE.Vector3(0, 5, 15).applyQuaternion(p.group.quaternion);
                 camera.position.copy(p.group.position).add(camOffset);
                 camera.lookAt(p.group.position);
                 yaw = camera.rotation.y;

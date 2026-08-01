@@ -68,6 +68,9 @@
         
         #health-bar-container { position: absolute; bottom: 40px; left: 40px; width: 400px; background: rgba(0, 0, 0, 0.6); border: 2px solid #0ff; padding: 5px; transform: skewX(-15deg); }
         #health-fill { height: 25px; background: linear-gradient(90deg, #f0f, #0ff); width: 100%; }
+
+        #dash-bar-container { position: absolute; bottom: 10px; left: 40px; width: 400px; background: rgba(0, 0, 0, 0.6); border: 1px solid #ff0; padding: 3px; transform: skewX(-15deg); }
+        #dash-fill { height: 8px; background: #ff0; box-shadow: 0 0 8px #ff0; width: 100%; }
         
         #weapon-info { position: absolute; bottom: 40px; right: 40px; text-align: right; transform: skewX(-15deg); }
         #weapon-name { font-size: 32px; color: #f0f; text-shadow: 0 0 15px #f0f; background: rgba(0,0,0,0.6); padding: 5px 20px; border-right: 4px solid #f0f; }
@@ -192,6 +195,7 @@
         </div>
         <div id="kill-feed"></div>
         <div id="health-bar-container"><div id="health-fill"></div></div>
+        <div id="dash-bar-container"><div id="dash-fill"></div></div>
         <div id="weapon-info">
             <div id="weapon-name">V-BLASTER</div>
             <div id="ammo-counter">120</div>
@@ -991,6 +995,7 @@
                     player.dashCooldown = player.dashCooldownMax; playSound('dash'); screenShake = 0.1;
                 }
                 if (player.dashCooldown > 0) player.dashCooldown -= delta;
+                document.getElementById('dash-bar-container').style.display = 'block';
                 document.getElementById('dash-fill').style.width = Math.max(0, (1 - (player.dashCooldown / player.dashCooldownMax)) * 100) + '%';
 
                 // Physics (Gravity/Jump)

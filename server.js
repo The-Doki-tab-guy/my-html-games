@@ -1,42 +1,114 @@
-// SYNTH PURGE MULTIPLAYER SERVER (server.js)
-// Requires: npm install ws
-const WebSocket = require('ws');
-const http = require('http');
+const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 8080;
-const server = http.createServer();
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocketServer({ port: PORT });
 
-// Room Store: { roomCode: { hostId: string, players: Map<ws, PlayerData>, operators: Set<string> } }
+// Active rooms storage: roomCode -> { players: Map(ws -> playerData), hostId: string, operators: Set<string> }
 const rooms = new Map();
 
+// Helper to generate 5-character alphanumeric room codes
 function generateRoomCode() {
-    return Math.random().toString(36).substring(2, 7).toUpperCase();
+    let code;
+    do {
+        code = Math.random().toString(36).substring(2, 7).toUpperCase();
+    } while (rooms.has(code));
+    return code;
+}
+
+// Broadcast JSON data to all clients in a room (optionally excluding one socket)
+function broadcastToRoom(room, data, excludeWs = null) {
+    const message = JSON.stringify(data);
+    for (const clientWs of room.players.keys()) {
+        if (clientWs !== excludeWs && clientWs.readyState === 1) { // 1 = OPEN
+            clientWs.send(message);
+        }
+    }
+}
+
+// Send updated player list and permissions to everyone in a room
+function broadcastRoomState(roomCode) {
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    const playerList = Array.from(room.players.values()).map(p => ({
+        id: p.id,
+        name: p.name,
+        isOp: room.operators.has(p.id),
+        isHost: p.id === room.hostId
+    }));
+
+    broadcastToRoom(room, {
+        type: 'room_state_update',
+        players: playerList,
+        hostId: room.hostId
+    });
+}
+
+// Clean up player upon disconnect or leave
+function handleDisconnect(ws) {
+    if (!ws.currentRoom) return;
+
+    const roomCode = ws.currentRoom;
+    const room = rooms.get(roomCode);
+
+    if (room) {
+        const playerData = room.players.get(ws);
+        const playerOp = room.operators.has(ws.id);
+
+        room.players.delete(ws);
+        room.operators.delete(ws.id);
+
+        console.log(`[DISCONNECT] ${playerData?.name || ws.id} left room ${roomCode}`);
+
+        if (room.players.size === 0) {
+            // Delete empty room
+            rooms.delete(roomCode);
+            console.log(`[ROOM CLOSED] Room ${roomCode} deleted (empty).`);
+        } else {
+            // Re-assign Host & OP if Host left
+            if (ws.id === room.hostId) {
+                const nextWs = room.players.keys().next().value;
+                const nextPlayer = room.players.get(nextWs);
+
+                room.hostId = nextPlayer.id;
+                room.operators.add(nextPlayer.id);
+
+                console.log(`[HOST MIGRATION] Room ${roomCode} host assigned to ${nextPlayer.name}`);
+            }
+            broadcastRoomState(roomCode);
+        }
+    }
+
+    ws.currentRoom = null;
 }
 
 wss.on('connection', (ws) => {
     ws.id = Math.random().toString(36).substring(2, 9);
-    ws.roomCode = null;
+    ws.currentRoom = null;
 
-    ws.on('message', (message) => {
+    console.log(`[CONNECTED] Client connected (ID: ${ws.id})`);
+
+    ws.on('message', (rawMessage) => {
         try {
-            const data = JSON.parse(message);
+            const data = JSON.parse(rawMessage);
 
-            // 1. CREATE ROOM
+            // --- 1. CREATE ROOM ---
             if (data.type === 'create_room') {
                 const roomCode = generateRoomCode();
                 const room = {
-                    code: roomCode,
-                    hostId: ws.id,
                     players: new Map(),
-                    operators: new Set([ws.id]) // Host is automatically an Operator
+                    hostId: ws.id,
+                    operators: new Set([ws.id])
                 };
-                
-                rooms.set(roomCode, room);
-                ws.roomCode = roomCode;
 
-                const playerData = { id: ws.id, name: data.name || 'Host', isOp: true, isHost: true };
+                const playerData = {
+                    id: ws.id,
+                    name: data.name || 'PILOT'
+                };
+
                 room.players.set(ws, playerData);
+                rooms.set(roomCode, room);
+                ws.currentRoom = roomCode;
 
                 ws.send(JSON.stringify({
                     type: 'room_created',
@@ -45,174 +117,120 @@ wss.on('connection', (ws) => {
                     isOp: true,
                     isHost: true
                 }));
-                
+
                 broadcastRoomState(roomCode);
+                console.log(`[ROOM CREATED] ${playerData.name} created room ${roomCode}`);
             }
 
-            // 2. JOIN ROOM
+            // --- 2. JOIN ROOM ---
             else if (data.type === 'join_room') {
-                const roomCode = data.roomCode ? data.roomCode.toUpperCase() : '';
-                const room = rooms.get(roomCode);
+                const targetCode = (data.roomCode || '').toUpperCase();
+                const room = rooms.get(targetCode);
 
                 if (!room) {
                     ws.send(JSON.stringify({ type: 'error', message: 'Room not found!' }));
                     return;
                 }
 
-                ws.roomCode = roomCode;
-                const isOp = room.operators.has(ws.id);
-                const playerData = { id: ws.id, name: data.name || 'Player', isOp, isHost: false };
+                const playerData = {
+                    id: ws.id,
+                    name: data.name || 'PILOT'
+                };
+
                 room.players.set(ws, playerData);
+                ws.currentRoom = targetCode;
 
                 ws.send(JSON.stringify({
                     type: 'room_joined',
-                    roomCode: roomCode,
+                    roomCode: targetCode,
                     playerId: ws.id,
-                    isOp,
+                    isOp: false,
                     isHost: false
                 }));
 
-                broadcastRoomState(roomCode);
+                broadcastRoomState(targetCode);
+                console.log(`[JOIN] ${playerData.name} joined room ${targetCode}`);
             }
 
-            // 3. TOGGLE OPERATOR (Host / OPs only)
+            // --- 3. TOGGLE OPERATOR PERMISSIONS ---
             else if (data.type === 'toggle_op') {
-                const room = rooms.get(ws.roomCode);
+                const room = rooms.get(ws.currentRoom);
                 if (!room) return;
 
-                // Check if requester is an operator
+                // Validate that request sender is an Operator
                 if (!room.operators.has(ws.id)) {
-                    ws.send(JSON.stringify({ type: 'sys_msg', text: 'PERM DENIED: You are not an operator.' }));
+                    ws.send(JSON.stringify({ type: 'cheat_result', success: false, message: 'UNAUTHORIZED ACCESS.' }));
                     return;
                 }
 
                 const targetId = data.targetPlayerId;
+
+                // Toggle logic (Host status cannot be removed via toggle)
                 if (room.operators.has(targetId)) {
-                    // Don't un-op host
                     if (targetId !== room.hostId) {
                         room.operators.delete(targetId);
+                        console.log(`[OP DEMOTE] Target ${targetId} demoted in room ${ws.currentRoom}`);
                     }
                 } else {
                     room.operators.add(targetId);
+                    console.log(`[OP PROMOTE] Target ${targetId} made OP in room ${ws.currentRoom}`);
                 }
 
-                // Sync OP status to player maps
-                for (let [client, pData] of room.players.entries()) {
-                    pData.isOp = room.operators.has(pData.id);
-                }
-
-                broadcastRoomState(ws.roomCode);
+                broadcastRoomState(ws.currentRoom);
             }
 
-            // 4. EXECUTE CHEAT COMMAND (Operator Checked)
+            // --- 4. CHEAT COMMAND EXECUTION ---
             else if (data.type === 'cheat_command') {
-                const room = rooms.get(ws.roomCode);
+                const room = rooms.get(ws.currentRoom);
                 if (!room) return;
 
+                // Server-side OP validation
                 if (!room.operators.has(ws.id)) {
-                    ws.send(JSON.stringify({ 
-                        type: 'cheat_result', 
-                        success: false, 
-                        message: 'OPERATOR PRIVILEGES REQUIRED TO USE CHEATS.' 
-                    }));
+                    ws.send(JSON.stringify({ type: 'cheat_result', success: false, message: 'OPERATOR RIGHTS REQUIRED.' }));
                     return;
                 }
 
-                // Broadcast cheat effect to room if needed
-                broadcastToRoom(ws.roomCode, {
+                const senderData = room.players.get(ws);
+                const cmd = (data.cmd || '').trim().toLowerCase();
+
+                // Confirm success back to sender
+                ws.send(JSON.stringify({ type: 'cheat_result', success: true, message: `COMMAND EXEC: [${cmd.toUpperCase()}]` }));
+
+                // Notify all players in room of cheat execution
+                broadcastToRoom(room, {
                     type: 'cheat_executed',
-                    executorId: ws.id,
-                    executorName: room.players.get(ws).name,
-                    cmd: data.cmd
+                    executorName: senderData?.name || 'OPERATOR',
+                    cmd: cmd
                 });
             }
 
-            // 5. MOVEMENT & STATE SYNC
+            // --- 5. REAL-TIME MOVEMENT SYNC ---
             else if (data.type === 'player_update') {
-                const room = rooms.get(ws.roomCode);
+                const room = rooms.get(ws.currentRoom);
                 if (!room) return;
 
-                broadcastToRoom(ws.roomCode, {
+                broadcastToRoom(room, {
                     type: 'player_moved',
                     playerId: ws.id,
                     transform: data.transform
-                }, ws);
-            }
-
-            // 6. SHOOTING & COMBAT SYNC
-            else if (data.type === 'player_shoot') {
-                broadcastToRoom(ws.roomCode, {
-                    type: 'player_shot',
-                    playerId: ws.id,
-                    weaponIndex: data.weaponIndex,
-                    origin: data.origin,
-                    direction: data.direction
-                }, ws);
+                }, ws); // Exclude sender from receiving their own transform echo
             }
 
         } catch (err) {
-            console.error('Error handling message:', err);
+            console.error('[ERROR] Failed to parse socket message:', err);
         }
     });
 
     ws.on('close', () => {
-        if (ws.roomCode) {
-            const room = rooms.get(ws.roomCode);
-            if (room) {
-                room.players.delete(ws);
-                room.operators.delete(ws.id);
+        handleDisconnect(ws);
+    });
 
-                if (room.players.size === 0) {
-                    rooms.delete(ws.roomCode);
-                } else {
-                    // Reassign host if host left
-                    if (room.hostId === ws.id) {
-                        const newHost = room.players.keys().next().value;
-                        room.hostId = newHost.id;
-                        room.operators.add(newHost.id);
-                        room.players.get(newHost).isHost = true;
-                        room.players.get(newHost).isOp = true;
-                    }
-                    broadcastRoomState(ws.roomCode);
-                }
-            }
-        }
+    ws.on('error', (error) => {
+        console.error(`[SOCKET ERROR] Client ${ws.id}:`, error);
     });
 });
 
-function broadcastToRoom(roomCode, data, excludeWs = null) {
-    const room = rooms.get(roomCode);
-    if (!room) return;
-    const msg = JSON.stringify(data);
-    for (let client of room.players.keys()) {
-        if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
-            client.send(msg);
-        }
-    }
-}
-
-function broadcastRoomState(roomCode) {
-    const room = rooms.get(roomCode);
-    if (!room) return;
-
-    const playerList = [];
-    for (let pData of room.players.values()) {
-        playerList.push(pData);
-    }
-
-    const msg = JSON.stringify({
-        type: 'room_state_update',
-        players: playerList,
-        hostId: room.hostId
-    });
-
-    for (let client of room.players.keys()) {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(msg);
-        }
-    }
-}
-
-server.listen(PORT, () => {
-    console.log(`[SYNTH PURGE SERVER] Listening on port ${PORT}`);
-});
+console.log(`========================================`);
+console.log(`SYNTH PURGE V5 SERVER ACTIVE ON PORT ${PORT}`);
+console.log(`Listening for local & network socket calls...`);
+console.log(`========================================`);

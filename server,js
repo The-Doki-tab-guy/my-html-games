@@ -1,0 +1,536 @@
+// server.js - Cloudflare Worker compatible WebSocket server
+// Deploy this as a Cloudflare Worker
+
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    
+    // Handle WebSocket upgrade
+    if (url.pathname === '/ws') {
+      const upgradeHeader = request.headers.get('Upgrade');
+      if (upgradeHeader !== 'websocket') {
+        return new Response('Expected websocket', { status: 400 });
+      }
+
+      const [client, server] = Object.values(new WebSocketPair());
+      
+      // Handle the WebSocket connection
+      handleWebSocket(server);
+      
+      return new Response(null, {
+        status: 101,
+        webSocket: client,
+      });
+    }
+    
+    // Health check endpoint
+    if (url.pathname === '/health') {
+      return new Response(JSON.stringify({ 
+        status: 'online', 
+        rooms: rooms.size,
+        players: Array.from(players.keys()).length,
+        timestamp: Date.now()
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    return new Response('SYNTH PURGE SERVER v5.0', { status: 200 });
+  }
+};
+
+// Game state
+const rooms = new Map();
+const players = new Map();
+const gameStates = new Map();
+
+// Room class
+class Room {
+  constructor(roomCode, hostId, hostName) {
+    this.code = roomCode;
+    this.hostId = hostId;
+    this.hostName = hostName;
+    this.players = new Map(); // playerId -> { name, ws, ready, isOperator }
+    this.started = false;
+    this.gameState = null;
+    this.createdAt = Date.now();
+    this.maxPlayers = 8;
+    
+    // Add host as first player
+    this.players.set(hostId, {
+      name: hostName,
+      ws: null, // Will be set when connection is established
+      ready: false,
+      isOperator: true
+    });
+  }
+  
+  addPlayer(playerId, name, ws) {
+    if (this.players.size >= this.maxPlayers) return false;
+    if (this.players.has(playerId)) return false;
+    
+    this.players.set(playerId, {
+      name: name || 'UNKNOWN_PILOT',
+      ws: ws,
+      ready: false,
+      isOperator: false
+    });
+    return true;
+  }
+  
+  removePlayer(playerId) {
+    this.players.delete(playerId);
+    // If host leaves, assign new host
+    if (playerId === this.hostId && this.players.size > 0) {
+      const firstPlayer = Array.from(this.players.keys())[0];
+      this.hostId = firstPlayer;
+      this.players.get(firstPlayer).isOperator = true;
+      this.hostName = this.players.get(firstPlayer).name;
+    }
+  }
+  
+  getPlayerList() {
+    return Array.from(this.players.entries()).map(([id, data]) => ({
+      id,
+      name: data.name,
+      ready: data.ready,
+      isOperator: data.isOperator,
+      isHost: id === this.hostId
+    }));
+  }
+  
+  setReady(playerId, ready) {
+    if (this.players.has(playerId)) {
+      this.players.get(playerId).ready = ready;
+      return true;
+    }
+    return false;
+  }
+  
+  setOperator(playerId, isOperator) {
+    if (this.players.has(playerId) && playerId !== this.hostId) {
+      this.players.get(playerId).isOperator = isOperator;
+      return true;
+    }
+    return false;
+  }
+  
+  allReady() {
+    if (this.players.size < 2) return false;
+    return Array.from(this.players.values()).every(p => p.ready === true);
+  }
+  
+  startGame() {
+    if (this.allReady() && !this.started) {
+      this.started = true;
+      this.gameState = {
+        wave: 1,
+        enemies: [],
+        players: {},
+        startedAt: Date.now()
+      };
+      return true;
+    }
+    return false;
+  }
+}
+
+// WebSocket handler
+function handleWebSocket(server) {
+  let playerId = null;
+  let currentRoom = null;
+  
+  server.accept();
+  
+  server.addEventListener('message', async (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      
+      switch (data.type) {
+        case 'auth':
+          handleAuth(server, data);
+          break;
+          
+        case 'create_room':
+          handleCreateRoom(server, data);
+          break;
+          
+        case 'join_room':
+          handleJoinRoom(server, data);
+          break;
+          
+        case 'leave_room':
+          handleLeaveRoom(server);
+          break;
+          
+        case 'set_ready':
+          handleSetReady(server, data);
+          break;
+          
+        case 'promote_operator':
+          handlePromoteOperator(server, data);
+          break;
+          
+        case 'start_game':
+          handleStartGame(server);
+          break;
+          
+        case 'game_update':
+          handleGameUpdate(server, data);
+          break;
+          
+        case 'player_action':
+          handlePlayerAction(server, data);
+          break;
+          
+        case 'ping':
+          server.send(JSON.stringify({ type: 'pong', timestamp: data.timestamp }));
+          break;
+          
+        default:
+          console.log('Unknown message type:', data.type);
+      }
+    } catch (error) {
+      console.error('Error processing message:', error);
+      server.send(JSON.stringify({ 
+        type: 'error', 
+        message: 'Invalid message format' 
+      }));
+    }
+  });
+  
+  server.addEventListener('close', () => {
+    handleDisconnect(playerId);
+  });
+  
+  // Store player ID in connection for cleanup
+  server._playerId = playerId;
+}
+
+function handleAuth(server, data) {
+  const { name } = data;
+  const id = generatePlayerId();
+  
+  playerId = id;
+  server._playerId = id;
+  
+  players.set(id, {
+    name: name || 'UNKNOWN_PILOT',
+    ws: server,
+    room: null
+  });
+  
+  server.send(JSON.stringify({
+    type: 'auth_success',
+    playerId: id,
+    name: name || 'UNKNOWN_PILOT'
+  }));
+}
+
+function handleCreateRoom(server, data) {
+  if (!playerId) {
+    server.send(JSON.stringify({ type: 'error', message: 'Not authenticated' }));
+    return;
+  }
+  
+  const { roomCode, playerName } = data;
+  
+  // Check if room already exists
+  if (rooms.has(roomCode)) {
+    server.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'Room code already exists' 
+    }));
+    return;
+  }
+  
+  // Check if player is already in a room
+  if (players.get(playerId)?.room) {
+    server.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'You are already in a room' 
+    }));
+    return;
+  }
+  
+  // Create room
+  const room = new Room(roomCode, playerId, playerName);
+  rooms.set(roomCode, room);
+  players.get(playerId).room = roomCode;
+  currentRoom = room;
+  
+  // Update player's WS reference
+  const playerData = room.players.get(playerId);
+  if (playerData) {
+    playerData.ws = server;
+    playerData.name = playerName;
+  }
+  
+  // Send room created response
+  server.send(JSON.stringify({
+    type: 'room_created',
+    roomCode: roomCode,
+    players: room.getPlayerList(),
+    isHost: true
+  }));
+  
+  // Broadcast to all players (just host for now)
+  broadcastRoomUpdate(roomCode);
+}
+
+function handleJoinRoom(server, data) {
+  if (!playerId) {
+    server.send(JSON.stringify({ type: 'error', message: 'Not authenticated' }));
+    return;
+  }
+  
+  const { roomCode, playerName } = data;
+  
+  // Check if room exists
+  if (!rooms.has(roomCode)) {
+    server.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'Room not found' 
+    }));
+    return;
+  }
+  
+  const room = rooms.get(roomCode);
+  
+  // Check if room is full
+  if (room.players.size >= room.maxPlayers) {
+    server.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'Room is full' 
+    }));
+    return;
+  }
+  
+  // Check if player is already in a room
+  if (players.get(playerId)?.room) {
+    server.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'You are already in a room' 
+    }));
+    return;
+  }
+  
+  // Add player to room
+  if (!room.addPlayer(playerId, playerName, server)) {
+    server.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'Failed to join room' 
+    }));
+    return;
+  }
+  
+  players.get(playerId).room = roomCode;
+  currentRoom = room;
+  
+  // Send join success
+  server.send(JSON.stringify({
+    type: 'room_joined',
+    roomCode: roomCode,
+    players: room.getPlayerList(),
+    isHost: false
+  }));
+  
+  // Broadcast update to all players
+  broadcastRoomUpdate(roomCode);
+}
+
+function handleLeaveRoom(server) {
+  if (!playerId || !currentRoom) {
+    server.send(JSON.stringify({ type: 'error', message: 'Not in a room' }));
+    return;
+  }
+  
+  const roomCode = currentRoom.code;
+  currentRoom.removePlayer(playerId);
+  players.get(playerId).room = null;
+  currentRoom = null;
+  
+  // If room is empty, delete it
+  if (currentRoom.players.size === 0) {
+    rooms.delete(roomCode);
+    server.send(JSON.stringify({ type: 'room_closed' }));
+  } else {
+    broadcastRoomUpdate(roomCode);
+    server.send(JSON.stringify({ type: 'left_room' }));
+  }
+}
+
+function handleSetReady(server, data) {
+  if (!playerId || !currentRoom) return;
+  
+  const { ready } = data;
+  currentRoom.setReady(playerId, ready);
+  broadcastRoomUpdate(currentRoom.code);
+}
+
+function handlePromoteOperator(server, data) {
+  if (!playerId || !currentRoom) return;
+  
+  const { targetPlayerId, promote } = data;
+  
+  // Only host can promote
+  if (playerId !== currentRoom.hostId) {
+    server.send(JSON.stringify({ type: 'error', message: 'Only host can promote' }));
+    return;
+  }
+  
+  currentRoom.setOperator(targetPlayerId, promote);
+  broadcastRoomUpdate(currentRoom.code);
+}
+
+function handleStartGame(server) {
+  if (!playerId || !currentRoom) return;
+  
+  // Only host can start game
+  if (playerId !== currentRoom.hostId) {
+    server.send(JSON.stringify({ type: 'error', message: 'Only host can start game' }));
+    return;
+  }
+  
+  if (currentRoom.startGame()) {
+    broadcastRoomUpdate(currentRoom.code);
+    // Broadcast game start
+    broadcastToRoom(currentRoom.code, {
+      type: 'game_started',
+      gameState: currentRoom.gameState,
+      players: currentRoom.getPlayerList()
+    });
+  } else {
+    server.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'Not all players are ready or not enough players' 
+    }));
+  }
+}
+
+function handleGameUpdate(server, data) {
+  if (!playerId || !currentRoom || !currentRoom.started) return;
+  
+  // Update game state with player data
+  const { playerState, enemies, wave } = data;
+  
+  if (!currentRoom.gameState) {
+    currentRoom.gameState = { players: {}, enemies: [], wave: 1 };
+  }
+  
+  currentRoom.gameState.players[playerId] = playerState;
+  
+  if (enemies) currentRoom.gameState.enemies = enemies;
+  if (wave) currentRoom.gameState.wave = wave;
+  
+  // Broadcast game state to all players (except sender)
+  broadcastToRoom(currentRoom.code, {
+    type: 'game_state_update',
+    gameState: currentRoom.gameState,
+    playerId: playerId,
+    timestamp: Date.now()
+  }, [playerId]);
+}
+
+function handlePlayerAction(server, data) {
+  if (!playerId || !currentRoom || !currentRoom.started) return;
+  
+  // Broadcast player action to all other players
+  broadcastToRoom(currentRoom.code, {
+    type: 'player_action',
+    playerId: playerId,
+    action: data.action,
+    data: data.data,
+    timestamp: Date.now()
+  }, [playerId]);
+}
+
+function handleDisconnect(playerId) {
+  if (!playerId) return;
+  
+  // Remove from room
+  if (players.has(playerId)) {
+    const playerData = players.get(playerId);
+    const roomCode = playerData.room;
+    
+    if (roomCode && rooms.has(roomCode)) {
+      const room = rooms.get(roomCode);
+      room.removePlayer(playerId);
+      
+      if (room.players.size === 0) {
+        rooms.delete(roomCode);
+      } else {
+        broadcastRoomUpdate(roomCode);
+        // Broadcast disconnect
+        broadcastToRoom(roomCode, {
+          type: 'player_disconnected',
+          playerId: playerId
+        });
+      }
+    }
+    
+    players.delete(playerId);
+  }
+}
+
+// Helper functions
+function generatePlayerId() {
+  return 'player_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+}
+
+function generateRoomCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+function broadcastRoomUpdate(roomCode) {
+  if (!rooms.has(roomCode)) return;
+  
+  const room = rooms.get(roomCode);
+  const players = room.getPlayerList();
+  
+  broadcastToRoom(roomCode, {
+    type: 'room_update',
+    players: players,
+    isStarted: room.started,
+    hostId: room.hostId,
+    hostName: room.hostName
+  });
+}
+
+function broadcastToRoom(roomCode, message, excludeIds = []) {
+  if (!rooms.has(roomCode)) return;
+  
+  const room = rooms.get(roomCode);
+  const messageStr = JSON.stringify(message);
+  
+  room.players.forEach((player, id) => {
+    if (!excludeIds.includes(id) && player.ws) {
+      try {
+        player.ws.send(messageStr);
+      } catch (error) {
+        console.error('Error sending to player:', id, error);
+      }
+    }
+  });
+}
+
+// Cloudflare Workers WebSocket helper
+class WebSocketPair {
+  constructor() {
+    // In Cloudflare Workers, WebSocketPair is available globally
+    // Fallback for local development
+    if (typeof WebSocketPair !== 'undefined') {
+      return new WebSocketPair();
+    }
+    
+    // Simple implementation for local testing
+    const ws1 = new WebSocket('ws://localhost:8080');
+    const ws2 = new WebSocket('ws://localhost:8080');
+    return { client: ws1, server: ws2 };
+  }
+}

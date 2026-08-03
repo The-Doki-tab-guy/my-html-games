@@ -115,6 +115,47 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
+        // --- GAME/RUN STATE ---
+        let gameActive = false;
+        let isPaused = false;
+        let difficulty = 'normal';
+        const diffSettings = {
+            easy:   { healthMult: 0.7, speedMult: 0.85, spawnMult: 0.7, creditMult: 1.25, startCredits: 500 },
+            normal: { healthMult: 1.0, speedMult: 1.0,  spawnMult: 1.0, creditMult: 1.0,  startCredits: 0 },
+            hard:   { healthMult: 1.5, speedMult: 1.25, spawnMult: 1.4, creditMult: 1.5,  startCredits: 0 }
+        };
+ 
+        // DOM elements
+        const nameInput = document.getElementById('player-name');
+        const hudCreditsDisplay = document.getElementById('hud-credits');
+ 
+        // Best wave record (persisted)
+        let bestWave = parseInt(localStorage.getItem('synthPurge_bestWave')) || 0;
+        document.getElementById('best-wave-status').textContent = bestWave > 0 ? `BEST WAVE REACHED: ${bestWave}` : 'NO RUNS RECORDED YET';
+ 
+        document.querySelectorAll('.diff-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                difficulty = btn.dataset.diff;
+                document.querySelectorAll('.diff-btn').forEach(b => b.style.boxShadow = 'none');
+                btn.style.boxShadow = `0 0 20px ${getComputedStyle(btn).color}`;
+            });
+        });
+ 
+        // Initial Time Status
+        const currentHour = new Date().getHours();
+        const currentMins = new Date().getMinutes().toString().padStart(2, '0');
+        const isDaytime = currentHour >= 6 && currentHour < 18;
+        document.getElementById('time-status').textContent = `[LOCAL CLOCK: ${currentHour}:${currentMins}] :: [ENVIRONMENT: ${isDaytime ? 'NEON SUNRISE' : 'MIDNIGHT GRID'}]`;
+ 
+        // --- GAME ENVIRONMENT SETTINGS ---
+        const envSettings = {
+            skyColor: isDaytime ? 0x110022 : 0x050510,
+            fogDensity: 0.008,
+            ambientLight: 0.6,
+            groundC1: '#0a0a1a', groundC2: '#ff00ff',
+            wallC1: '#111122', wallC2: '#00ffff'
+        };
+ 
         // --- MULTIPLAYER SYSTEM ---
         let ws = null;
         let isConnected = false;
@@ -466,8 +507,984 @@
             }
             return code;
         }
+ 
+        // LAUNCH BUTTON
+        document.getElementById('start-offline-btn').addEventListener('click', startOfflineGame);
+ 
+        // --- GAME LAUNCH SEQUENCE ---
+        function startOfflineGame() {
+            if (document.querySelector('.mode-btn.active').dataset.mode === 'multi') {
+                // Multiplayer mode - wait for server to start
+                alert('Please connect to a server and join/host a room to play multiplayer');
+                return;
+            }
+            
+            const settings = diffSettings[difficulty];
+            totalCredits += settings.startCredits;
+            document.getElementById('main-menu').style.display = 'none';
+            document.getElementById('hud').style.display = 'block';
+            document.getElementById('crosshair').style.display = 'block';
+            updateRoleHUD();
+            document.getElementById('hud-credits').textContent = totalCredits;
+ 
+            initAudio(); // Initialize sound engine
+ 
+            // Spawn world
+            createShopTerminal(20, -20);
+            createShopTerminal(-40, 50);
+            new Car(10, 10);
+            new Car(-15, -15);
+            new Plane(25, 25);
+            new Plane(-30, 10);
+            
+            // Spawn ammo crates
+            for (let i = 0; i < 12; i++) {
+                const x = (Math.random() - 0.5) * 160;
+                const z = (Math.random() - 0.5) * 160;
+                if (Math.abs(x) > 20 || Math.abs(z) > 20) {
+                    new AmmoCrate(x, z);
+                }
+            }
+            
+            for (let i = 0; i < Math.round(10 * settings.spawnMult); i++) spawnEnemy();
+ 
+            gameActive = true;
+            updateWeaponUI();
+            renderer.domElement.requestPointerLock();
+            lastTime = performance.now();
+            
+            // Start supply drop timer
+            supplyDropTimer = 30; // First drop in 30 seconds
+            animate();
+        }
+ 
+        function updateRoleHUD() {
+            document.getElementById('role-text').textContent = difficulty.toUpperCase();
+        }
+ 
+        // --- PAUSE MENU ---
+        function togglePause() {
+            if (!gameActive) return;
+            isPaused = !isPaused;
+            if (isPaused) {
+                document.exitPointerLock();
+                document.getElementById('pause-stats').textContent = `WAVE ${waveNum} :: KILLS ${player.kills} :: CREDITS ${totalCredits}`;
+                document.getElementById('pause-menu').style.display = 'flex';
+            } else {
+                document.getElementById('pause-menu').style.display = 'none';
+                renderer.domElement.requestPointerLock();
+            }
+        }
+        document.getElementById('resume-btn').addEventListener('click', togglePause);
+        document.getElementById('quit-btn').addEventListener('click', () => {
+            if (waveNum > bestWave) { bestWave = waveNum; localStorage.setItem('synthPurge_bestWave', bestWave); }
+            location.reload();
+        });
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && gameActive && !isConsoleOpen && !isShopOpen) togglePause(); });
+ 
+        // --- WEBAUDIO ENGINE (V3/V4 Restored) ---
+        let audioCtx, bassCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            if (!bassCtx) {
+                bassCtx = new (window.AudioContext || window.webkitAudioContext)();
+                setInterval(() => {
+                    if(!gameActive || player.isDead || isShopOpen || isConsoleOpen) return;
+                    const osc = bassCtx.createOscillator();
+                    const gain = bassCtx.createGain();
+                    osc.connect(gain); gain.connect(bassCtx.destination);
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(55, bassCtx.currentTime); // Deep Bass A1
+                    gain.gain.setValueAtTime(0.15, bassCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, bassCtx.currentTime + 0.15);
+                    osc.start(); osc.stop(bassCtx.currentTime + 0.15);
+                }, 300); // 16-bit bassline beat
+            }
+        }
         
-        // --- MULTIPLAYER GAME START ---
+        function playSound(type, pitchOverride = null) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            if (type === 'shoot') {
+                osc.type = pitchOverride > 1000 ? 'sawtooth' : (pitchOverride < 500 ? 'square' : 'triangle');
+                osc.frequency.setValueAtTime(pitchOverride || 800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            } else if (type === 'hit') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'dash') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.4);
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+            } else if (type === 'bossDeath') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(50, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(10, audioCtx.currentTime + 2.0);
+                gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 2.0);
+                osc.start(); osc.stop(audioCtx.currentTime + 2.0);
+            } else if (type === 'pickup') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.15);
+                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            } else if (type === 'supply') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.5);
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            }
+        }
+ 
+        // --- THREE.JS SCENE SETUP ---
+        function createGridTexture(color1, color2) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = color1; ctx.fillRect(0, 0, 512, 512);
+            ctx.strokeStyle = color2; ctx.lineWidth = 4;
+            for(let i=0; i<=512; i+=64) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+ 
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(envSettings.skyColor);
+        scene.fog = new THREE.FogExp2(envSettings.skyColor, envSettings.fogDensity);
+ 
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1500);
+        camera.position.set(0, 1.6, 0);
+        const flashLight = new THREE.PointLight(0xffffff, 0, 15);
+        camera.add(flashLight);
+        scene.add(camera);
+ 
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+ 
+        scene.add(new THREE.AmbientLight(0xffffff, envSettings.ambientLight));
+        scene.add(new THREE.HemisphereLight(0x00ffff, 0xff00ff, 0.8));
+ 
+        // Massive Retro Sun
+        const sunGeom = new THREE.CircleGeometry(300, 64);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xff0055, fog: false, side: THREE.DoubleSide });
+        const sun = new THREE.Mesh(sunGeom, sunMat);
+        sun.position.set(0, 150, -800);
+        scene.add(sun);
+ 
+        const groundTex = createGridTexture(envSettings.groundC1, envSettings.groundC2);
+        groundTex.repeat.set(50, 50);
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.1, metalness: 0.8 }));
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+ 
+        const wallTex = createGridTexture(envSettings.wallC1, envSettings.wallC2);
+        wallTex.repeat.set(2, 2);
+        
+        function createBuilding(x, z, w, h, d) {
+            const building = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.2, metalness: 0.9 }));
+            building.position.set(x, h / 2, z);
+            scene.add(building);
+        }
+        
+        // City Skyline Spawner
+        for(let i=0; i<20; i++) {
+            const bx = (Math.random()-0.5)*800; const bz = (Math.random()-0.5)*800;
+            if(Math.abs(bx) > 100 || Math.abs(bz) > 100) createBuilding(bx, bz, 30+Math.random()*40, 50+Math.random()*150, 30+Math.random()*40);
+        }
+ 
+        // --- IN-GAME ENTITIES (Shops, Cars, Planes, Ammo Crates, Supply Drops) ---
+        const shopEntities = [];
+        function createShopTerminal(x, z) {
+            const group = new THREE.Group(); group.position.set(x, 1, z);
+            const base = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 3), new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 }));
+            const holo = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.1, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 }));
+            holo.position.y = 1.5; group.add(base); group.add(holo);
+            scene.add(group); shopEntities.push(group);
+        }
+ 
+        const carEntities = [];
+        class Car {
+            constructor(x, z) {
+                this.group = new THREE.Group();
+                this.group.position.set(x, 0.5, z);
+                
+                // Sleek Chassis (V4)
+                const chassisMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.1 });
+                const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.6, 4.8), chassisMat);
+                chassis.position.y = 0.5; this.group.add(chassis);
+ 
+                // Cockpit Glass
+                const glassMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7, emissive: 0x005555 });
+                const glass = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 2.5), glassMat);
+                glass.position.set(0, 1.0, -0.5); this.group.add(glass);
+ 
+                // Neon Trim
+                const trim = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 5.0), new THREE.MeshBasicMaterial({ color: 0xff00ff }));
+                trim.position.y = 0.2; this.group.add(trim);
+ 
+                // Wheels with glowing rims
+                const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 16);
+                const wheelMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9 });
+                const neonMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+                const positions = [[-1.2, 0.4, 1.8], [1.2, 0.4, 1.8], [-1.2, 0.4, -1.8], [1.2, 0.4, -1.8]];
+                positions.forEach(p => {
+                    const w = new THREE.Mesh(wheelGeo, wheelMat);
+                    w.rotation.z = Math.PI / 2; w.position.set(...p);
+                    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.22, 16), neonMat);
+                    rim.rotation.z = Math.PI / 2; rim.position.set(...p);
+                    this.group.add(w); this.group.add(rim);
+                });
+ 
+                scene.add(this.group);
+                carEntities.push(this);
+                this.speed = 0; this.angle = 0; this.yVelocity = 0;
+            }
+        }
+ 
+        const planeEntities = [];
+        class Plane {
+            constructor(x, z) {
+                this.group = new THREE.Group();
+                this.group.position.set(x, 1.5, z);
+                
+                // Advanced Multimesh Model (V4)
+                const fusMat = new THREE.MeshStandardMaterial({color: 0x111122, metalness: 0.9, roughness: 0.1});
+                const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 5, 8), fusMat);
+                fuselage.rotation.x = Math.PI / 2; this.group.add(fuselage);
+                
+                const neonMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+                const wings = new THREE.Mesh(new THREE.BoxGeometry(8, 0.1, 2), neonMat); this.group.add(wings);
+                
+                const magentaMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+                const tail = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 1), magentaMat); tail.position.set(0, 0, -2.2); this.group.add(tail);
+                
+                const fin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 1.5), magentaMat); fin.position.set(0, 0.8, -2.2); this.group.add(fin);
+                
+                // Weapons mounted on wings
+                const gunGeo = new THREE.CylinderGeometry(0.1, 0.1, 1, 8);
+                const gunL = new THREE.Mesh(gunGeo, fusMat); gunL.rotation.x = Math.PI/2; gunL.position.set(-2, -0.2, 0.5); this.group.add(gunL);
+                const gunR = new THREE.Mesh(gunGeo, fusMat); gunR.rotation.x = Math.PI/2; gunR.position.set(2, -0.2, 0.5); this.group.add(gunR);
+ 
+                scene.add(this.group); planeEntities.push(this);
+                this.speed = 0; this.pitch = 0; this.yaw = 0; this.roll = 0;
+            }
+        }
+ 
+        // --- AMMO CRATE CLASS ---
+        const ammoCrates = [];
+        class AmmoCrate {
+            constructor(x, z) {
+                this.group = new THREE.Group();
+                this.group.position.set(x, 0.5, z);
+                
+                // Glowing crate
+                const boxMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x00aaff, 
+                    emissive: 0x00aaff, 
+                    emissiveIntensity: 0.5,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                const box = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), boxMat);
+                this.group.add(box);
+                
+                // Glow ring
+                const ringMat = new THREE.MeshBasicMaterial({ 
+                    color: 0x00ffff, 
+                    transparent: true, 
+                    opacity: 0.4,
+                    wireframe: true
+                });
+                const ring = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), ringMat);
+                this.group.add(ring);
+                
+                // Holographic ammo symbol
+                const ammoMat = new THREE.MeshBasicMaterial({ 
+                    color: 0x00ffff, 
+                    transparent: true, 
+                    opacity: 0.6 
+                });
+                const symbol = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.05, 8), ammoMat);
+                symbol.position.y = 0.8;
+                symbol.rotation.x = Math.PI / 2;
+                this.group.add(symbol);
+                
+                scene.add(this.group);
+                ammoCrates.push(this);
+                this.pickedUp = false;
+                this.bobTimer = 0;
+                this.radius = 1.5; // Pickup radius
+            }
+            
+            update(delta, time) {
+                if (this.pickedUp) return;
+                
+                // Bobbing animation
+                this.bobTimer += delta;
+                this.group.position.y = 0.5 + Math.sin(this.bobTimer * 2) * 0.15;
+                this.group.rotation.y += delta * 1.5;
+                
+                // Check if player is near
+                let playerPos = camera.position;
+                if (player.state === 'driving') playerPos = player.currentCar.group.position;
+                if (player.state === 'flying') playerPos = player.currentPlane.group.position;
+                
+                const dist = this.group.position.distanceTo(playerPos);
+                if (dist < this.radius && !this.pickedUp) {
+                    this.pickup();
+                }
+            }
+            
+            pickup() {
+                if (this.pickedUp) return;
+                this.pickedUp = true;
+                
+                // Give ammo
+                const ammoAmount = 60 + Math.floor(Math.random() * 40);
+                player.ammo += ammoAmount;
+                if (player.ammo > 9999) player.ammo = 9999;
+                
+                // Create pickup notification
+                showPickupNotification(`+${ammoAmount} AMMO`);
+                
+                playSound('pickup');
+                
+                // Visual effect - explode into particles
+                spawnExplosion(this.group.position, 15, false, 0x00ffff);
+                
+                // Remove from scene
+                scene.remove(this.group);
+                const index = ammoCrates.indexOf(this);
+                if (index > -1) ammoCrates.splice(index, 1);
+            }
+        }
+        
+        // --- SUPPLY DROP SYSTEM ---
+        let supplyDropTimer = 30;
+        let supplyDropActive = false;
+        let supplyDropPosition = null;
+        let supplyDropGroup = null;
+        let supplyDropLanded = false;
+        let supplyDropBeacon = null;
+        let supplyDropMarker = null;
+        
+        function spawnSupplyDrop() {
+            // Random position somewhat near the player but not too close
+            let x, z;
+            let playerPos = camera.position;
+            if (player.state === 'driving') playerPos = player.currentCar.group.position;
+            if (player.state === 'flying') playerPos = player.currentPlane.group.position;
+            
+            let attempts = 0;
+            do {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 50 + Math.random() * 80;
+                x = playerPos.x + Math.cos(angle) * distance;
+                z = playerPos.z + Math.sin(angle) * distance;
+                attempts++;
+            } while (attempts < 20 && (Math.abs(x) > 300 || Math.abs(z) > 300));
+            
+            supplyDropPosition = new THREE.Vector3(x, 150, z);
+            supplyDropActive = true;
+            supplyDropLanded = false;
+            
+            // Create beacon/indicator
+            const indicatorMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffff00, 
+                transparent: true, 
+                opacity: 0.7 
+            });
+            supplyDropBeacon = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 1, 16), indicatorMat);
+            supplyDropBeacon.position.set(x, 150, z);
+            scene.add(supplyDropBeacon);
+            
+            // Create marker on HUD
+            const marker = document.createElement('div');
+            marker.className = 'supply-drop-marker';
+            marker.textContent = '⬇ SUPPLY DROP';
+            marker.id = 'supply-drop-marker';
+            document.body.appendChild(marker);
+            supplyDropMarker = marker;
+            
+            // Show warning
+            document.getElementById('supply-drop-indicator').style.display = 'block';
+            playSound('supply');
+            addKillMessage('⚠ INCOMING SUPPLY DROP - CHECK RADAR ⚠');
+            
+            // Hide indicator after 3 seconds
+            setTimeout(() => {
+                document.getElementById('supply-drop-indicator').style.display = 'none';
+            }, 3000);
+            
+            // Create the actual supply drop group (crate with loot)
+            supplyDropGroup = new THREE.Group();
+            
+            // Crate body
+            const crateMat = new THREE.MeshStandardMaterial({ 
+                color: 0xff8800, 
+                emissive: 0xff4400, 
+                emissiveIntensity: 0.3,
+                metalness: 0.5,
+                roughness: 0.5
+            });
+            const crate = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2, 2.5), crateMat);
+            supplyDropGroup.add(crate);
+            
+            // Glow ring
+            const glowMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffff00, 
+                transparent: true, 
+                opacity: 0.3,
+                wireframe: true
+            });
+            const glow = new THREE.Mesh(new THREE.BoxGeometry(3.5, 3, 3.5), glowMat);
+            supplyDropGroup.add(glow);
+            
+            // Supply icon (plus sign)
+            const iconMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const bar1 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.1), iconMat);
+            bar1.position.y = 1.2;
+            supplyDropGroup.add(bar1);
+            const bar2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), iconMat);
+            bar2.position.y = 1.2;
+            supplyDropGroup.add(bar2);
+            
+            // Start falling animation
+            supplyDropGroup.position.set(x, 150, z);
+            scene.add(supplyDropGroup);
+        }
+        
+        function updateSupplyDrop(delta, time) {
+            if (!supplyDropActive) return;
+            
+            if (supplyDropBeacon) {
+                supplyDropBeacon.rotation.y += delta * 2;
+                supplyDropBeacon.position.y = 150 + Math.sin(time * 3) * 5;
+            }
+            
+            // Update marker position on HUD
+            if (supplyDropMarker && supplyDropPosition) {
+                const pos = supplyDropPosition.clone();
+                // Project to screen
+                pos.y = 150; // Keep at beacon height until landed
+                pos.project(camera);
+                const x = (pos.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-pos.y * 0.5 + 0.5) * window.innerHeight;
+                
+                // Only show if in front of camera
+                if (pos.z < 1) {
+                    supplyDropMarker.style.display = 'block';
+                    supplyDropMarker.style.left = x + 'px';
+                    supplyDropMarker.style.top = y + 'px';
+                } else {
+                    supplyDropMarker.style.display = 'none';
+                }
+            }
+            
+            // Fall animation
+            if (supplyDropGroup && !supplyDropLanded) {
+                supplyDropGroup.position.y -= 80 * delta;
+                supplyDropGroup.rotation.x += delta * 3;
+                supplyDropGroup.rotation.z += delta * 2;
+                
+                // Check if landed
+                if (supplyDropGroup.position.y <= 0.5) {
+                    supplyDropGroup.position.y = 0.5;
+                    supplyDropLanded = true;
+                    
+                    // Remove beacon
+                    if (supplyDropBeacon) {
+                        scene.remove(supplyDropBeacon);
+                        supplyDropBeacon = null;
+                    }
+                    
+                    // Remove marker
+                    if (supplyDropMarker) {
+                        supplyDropMarker.remove();
+                        supplyDropMarker = null;
+                    }
+                    
+                    // Create explosion effect on landing
+                    spawnExplosion(supplyDropGroup.position, 30, false, 0xffff00);
+                    playSound('supply');
+                    
+                    addKillMessage('⚡ SUPPLY DROP LANDED - COLLECT LOOT ⚡');
+                }
+            }
+            
+            // Check if player is near the landed supply drop
+            if (supplyDropLanded && supplyDropGroup) {
+                let playerPos = camera.position;
+                if (player.state === 'driving') playerPos = player.currentCar.group.position;
+                if (player.state === 'flying') playerPos = player.currentPlane.group.position;
+                
+                const dist = supplyDropGroup.position.distanceTo(playerPos);
+                if (dist < 5) {
+                    // Collect supply drop loot
+                    collectSupplyDrop();
+                }
+                
+                // Pulsing glow when landed
+                const glow = supplyDropGroup.children[1];
+                if (glow) {
+                    glow.material.opacity = 0.2 + Math.sin(time * 4) * 0.15;
+                }
+            }
+        }
+        
+        function collectSupplyDrop() {
+            if (!supplyDropGroup) return;
+            
+            // Give rewards
+            const healthAmount = 50 + Math.floor(Math.random() * 50);
+            const ammoAmount = 100 + Math.floor(Math.random() * 100);
+            const creditAmount = 300 + Math.floor(Math.random() * 700);
+            
+            player.health = Math.min(player.maxHealth, player.health + healthAmount);
+            player.ammo += ammoAmount;
+            if (player.ammo > 9999) player.ammo = 9999;
+            totalCredits += creditAmount;
+            localStorage.setItem('synthPurge_credits', totalCredits);
+            
+            // Show notifications
+            showPickupNotification(`❤ +${healthAmount} HP`);
+            setTimeout(() => showPickupNotification(`🔫 +${ammoAmount} AMMO`), 300);
+            setTimeout(() => showPickupNotification(`💰 +${creditAmount} CR`), 600);
+            
+            playSound('pickup');
+            
+            // Explosion effect
+            spawnExplosion(supplyDropGroup.position, 40, false, 0xff8800);
+            
+            // Remove supply drop
+            scene.remove(supplyDropGroup);
+            supplyDropGroup = null;
+            supplyDropActive = false;
+            supplyDropLanded = false;
+            supplyDropPosition = null;
+            
+            if (supplyDropMarker) {
+                supplyDropMarker.remove();
+                supplyDropMarker = null;
+            }
+            
+            addKillMessage('✅ SUPPLY LOOT COLLECTED');
+            
+            // Update HUD
+            document.getElementById('hud-credits').textContent = totalCredits;
+            document.getElementById('health-fill').style.width = Math.max(0, (player.health / player.maxHealth) * 100) + '%';
+        }
+        
+        function showPickupNotification(text) {
+            const div = document.createElement('div');
+            div.className = 'pickup-notification';
+            div.textContent = text;
+            document.body.appendChild(div);
+            setTimeout(() => div.remove(), 1000);
+        }
+        
+        // --- PARTICLE SYSTEMS (Restored V3/V4) ---
+        const particles = [];
+        function spawnExplosion(pos, count = 20, isBoss = false, colorOverride = null) {
+            let color = colorOverride || (isBoss ? 0xff00ff : 0x00ffff);
+            for(let i=0; i<count; i++) {
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({color: color}));
+                mesh.position.copy(pos);
+                mesh.velocity = new THREE.Vector3((Math.random()-0.5)*(isBoss?60:30), Math.random()*(isBoss?40:20), (Math.random()-0.5)*(isBoss?60:30));
+                mesh.life = 1.0;
+                scene.add(mesh);
+                particles.push(mesh);
+            }
+        }
+ 
+        // --- COMBAT CONFIGURATION (Weapons, Status) ---
+        const weapons = [
+            { name: 'V-BLASTER', dmg: 35, cd: 150, cost: 1, pitch: 900, color: '#0ff' },
+            { name: 'HEAVY PULSE', dmg: 90, cd: 500, cost: 5, pitch: 300, color: '#f0f' },
+            { name: 'RAILGUN', dmg: 250, cd: 1200, cost: 15, pitch: 1800, color: '#fff' },
+            { name: 'PLASMA SHOTGUN', dmg: 45, cd: 700, cost: 8, pitch: 500, color: '#ff0', pellets: 6, spread: 0.18 }
+        ];
+ 
+        let totalCredits = parseInt(localStorage.getItem('synthPurge_credits')) || 0;
+        let waveNum = 1;
+        
+        let isMouseDown = false;
+        let isMouseDownPrev = false;
+        let screenShake = 0;
+        let lastShotTime = 0;
+        
+        const player = {
+            velocity: new THREE.Vector3(), grounded: false,
+            health: 200, maxHealth: 200, ammo: 400, kills: 0,
+            speedMultiplier: 1.5, dmgMultiplier: 1.0, dashCooldown: 0,
+            carAccel: 0.08, carMaxSpeed: 2.5,
+            godmode: false, infiniteAmmo: false, noclip: false, isDead: false,
+            weaponIndex: 0, state: 'walking', currentCar: null, currentPlane: null,
+            regenRate: 0, dashCooldownMax: 1.5
+        };
+ 
+        // UI Updates
+        function updateWeaponUI() {
+            const wp = weapons[player.weaponIndex];
+            document.getElementById('weapon-name').textContent = wp.name;
+            document.getElementById('weapon-name').style.color = wp.color;
+            document.getElementById('weapon-name').style.borderRightColor = wp.color;
+            document.getElementById('weapon-name').style.textShadow = `0 0 15px ${wp.color}`;
+            document.querySelectorAll('.crosshair-line').forEach(l => { l.style.background = wp.color; l.style.boxShadow = `0 0 10px ${wp.color}`; });
+        }
+ 
+        function addKillMessage(msg) {
+            const feed = document.getElementById('kill-feed');
+            const div = document.createElement('div'); div.className = 'kill-message'; div.textContent = msg;
+            feed.appendChild(div); setTimeout(() => div.remove(), 4000);
+        }
+ 
+        // --- INPUT HANDLING ---
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            if (!gameActive || isPaused) return;
+            if (e.key === '`') { e.preventDefault(); toggleCheatConsole(); return; }
+            if (e.key.toLowerCase() === 'e' && !isConsoleOpen && !isShopOpen) handleInteraction();
+            if (!isConsoleOpen && !isShopOpen) {
+                keys[e.key.toLowerCase()] = true;
+                if (player.state === 'walking' || player.state === 'flying') {
+                    if (e.key === '1' && player.weaponIndex !== 0) { player.weaponIndex = 0; updateWeaponUI(); }
+                    if (e.key === '2' && player.weaponIndex !== 1) { player.weaponIndex = 1; updateWeaponUI(); }
+                    if (e.key === '3' && player.weaponIndex !== 2) { player.weaponIndex = 2; updateWeaponUI(); }
+                    if (e.key === '4' && player.weaponIndex !== 3) { player.weaponIndex = 3; updateWeaponUI(); }
+                }
+            }
+        });
+        window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+ 
+        let yaw = 0, pitch = 0;
+        document.addEventListener('mousemove', (e) => {
+            if (gameActive && document.pointerLockElement === renderer.domElement && !player.isDead) {
+                if (player.state === 'walking') {
+                    yaw -= e.movementX * 0.002;
+                    pitch -= e.movementY * 0.002;
+                    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                } else if (player.state === 'driving') {
+                    yaw -= e.movementX * 0.002; pitch = 0;
+                }
+            }
+        });
+ 
+        // Shooting inputs
+        document.addEventListener('mousedown', (e) => { if (gameActive && document.pointerLockElement === renderer.domElement) isMouseDown = true; });
+        document.addEventListener('mouseup', () => { isMouseDown = false; });
+        document.addEventListener('click', () => { if (gameActive && !isConsoleOpen && !isShopOpen && !player.isDead && document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock(); });
+ 
+        // --- INTERACTION LOGIC (E key) ---
+        let interactTarget = null;
+        let isShopOpen = false;
+        function handleInteraction() {
+            // Exit logic
+            if (player.state === 'driving') {
+                player.state = 'walking';
+                camera.position.copy(player.currentCar.group.position); camera.position.y += 1.6; camera.position.x += 4;
+                player.currentCar = null; document.getElementById('dashboard').style.display = 'none'; document.getElementById('crosshair').style.display = 'block'; return;
+            }
+            if (player.state === 'flying') {
+                player.state = 'walking';
+                camera.position.copy(player.currentPlane.group.position); camera.position.y += 1.6; camera.position.x += 6; 
+                player.currentPlane = null; document.getElementById('dashboard').style.display = 'none'; document.getElementById('crosshair').style.display = 'block'; return;
+            }
+ 
+            // Enter / Terminal logic
+            if (interactTarget) {
+                if (interactTarget.type === 'car') {
+                    player.state = 'driving'; player.currentCar = interactTarget.obj;
+                    document.getElementById('dashboard').style.display = 'flex'; document.getElementById('crosshair').style.display = 'none';
+                } else if (interactTarget.type === 'plane') {
+                    player.state = 'flying'; player.currentPlane = interactTarget.obj;
+                    document.getElementById('dashboard').style.display = 'flex'; document.getElementById('crosshair').style.display = 'block';
+                } else if (interactTarget.type === 'shop') {
+                    isShopOpen = true; isMouseDown = false; document.exitPointerLock();
+                    document.getElementById('in-game-shop').style.display = 'flex';
+                    document.getElementById('shop-credits-display').textContent = totalCredits;
+                }
+            }
+        }
+ 
+        // --- SHOP & UPGRADES ---
+        function buyInGameUpgrade(type, cost) {
+            if (totalCredits >= cost) {
+                totalCredits -= cost; localStorage.setItem('synthPurge_credits', totalCredits);
+                document.getElementById('shop-credits-display').textContent = totalCredits;
+                document.getElementById('hud-credits').textContent = totalCredits;
+                
+                if (type === 'dmg') player.dmgMultiplier += 0.5;
+                if (type === 'car') { player.carAccel += 0.05; player.carMaxSpeed += 1.0; }
+                if (type === 'heal') player.health = player.maxHealth;
+                if (type === 'regen') player.regenRate += 3;
+                if (type === 'dash') player.dashCooldownMax = Math.max(0.3, player.dashCooldownMax - 0.5);
+            } else { addKillMessage("SYS: INSUFFICIENT CREDITS"); }
+        }
+ 
+        window.closeShop = function() {
+            isShopOpen = false; document.getElementById('in-game-shop').style.display = 'none';
+            renderer.domElement.requestPointerLock();
+        }
+ 
+        // --- CHEAT CONSOLE & OPERATOR CHECKS ---
+        const cheatInput = document.getElementById('cheat-input');
+        const cheatConsole = document.getElementById('cheat-console');
+        let isConsoleOpen = false;
+ 
+        function toggleCheatConsole() {
+            isConsoleOpen = !isConsoleOpen;
+            if (isConsoleOpen) {
+                document.exitPointerLock(); cheatConsole.style.display = 'block'; cheatInput.value = ''; setTimeout(() => cheatInput.focus(), 10);
+            } else {
+                cheatConsole.style.display = 'none'; if (gameActive) renderer.domElement.requestPointerLock();
+            }
+        }
+ 
+        cheatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const cmd = cheatInput.value.trim().toLowerCase();
+                
+                if(cmd === 'godmode' || cmd === 'iddqd') { player.godmode = !player.godmode; addKillMessage(`SYS: GODMODE ${player.godmode ? 'ON' : 'OFF'}`); } 
+                else if(cmd === 'ammo' || cmd === 'idkfa') { player.infiniteAmmo = !player.infiniteAmmo; if(player.infiniteAmmo) player.ammo = 9999; addKillMessage(`SYS: INF AMMO ${player.infiniteAmmo ? 'ON' : 'OFF'}`); } 
+                else if(cmd === 'money' || cmd === 'rich') { totalCredits += 10000; localStorage.setItem('synthPurge_credits', totalCredits); document.getElementById('hud-credits').textContent = totalCredits; addKillMessage('SYS: 10K CR INJECTED'); } 
+                else if(cmd === 'boss') { const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); new Boss(camera.position.x + camDir.x * 20, camera.position.z + camDir.z * 20); addKillMessage('SYS: OMEGA THREAT FORCED'); }
+                else if(cmd === 'finalboss') { const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); new FinalBoss(camera.position.x + camDir.x * 30, camera.position.z + camDir.z * 30); addKillMessage('SYS: NEXUS APEX FORCED'); }
+                else if(cmd === 'supply') { spawnSupplyDrop(); addKillMessage('SYS: SUPPLY DROP FORCED'); }
+                else if(cmd !== '') addKillMessage('SYS: INVALID SYNTAX');
+                toggleCheatConsole();
+            }
+        });
+ 
+        // --- ENEMY AI & BOSS CLASSES (V3/V4 Restored) ---
+        const enemies = [];
+        class Enemy {
+            constructor(x, z) {
+                this.group = new THREE.Group(); this.group.position.set(x, 2, z);
+                this.bodyMat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0xff0055, emissiveIntensity: 0.8, wireframe: true });
+                this.body = new THREE.Mesh(new THREE.OctahedronGeometry(1.5, 0), this.bodyMat);
+                this.group.add(this.body); scene.add(this.group);
+                this.group.userData = { health: 200 * diffSettings[difficulty].healthMult, hitEffect: 0, isBoss: false };
+                this.velocity = new THREE.Vector3(); this.speed = (6 + Math.random() * 4) * diffSettings[difficulty].speedMult;
+                this.hoverOffset = Math.random() * Math.PI * 2;
+                enemies.push(this);
+            }
+            update(delta, time) {
+                let targetPos = camera.position;
+                if(player.state === 'driving') targetPos = player.currentCar.group.position;
+                if(player.state === 'flying') targetPos = player.currentPlane.group.position;
+                
+                const toPlayer = new THREE.Vector3().subVectors(targetPos, this.group.position);
+                toPlayer.y = 0; const distToPlayer = toPlayer.length();
+ 
+                if (distToPlayer < 120) {
+                    const dir = toPlayer.normalize();
+                    this.velocity.x = dir.x * this.speed; this.velocity.z = dir.z * this.speed;
+                }
+                this.group.position.x += this.velocity.x * delta;
+                this.group.position.z += this.velocity.z * delta;
+                this.group.position.y = 2 + Math.sin(time * 5 + this.hoverOffset) * 0.8;
+ 
+                this.body.rotation.y += delta * 2; this.body.rotation.x += delta;
+ 
+                if (distToPlayer < 4 && Math.random() < 0.1 && !player.godmode) {
+                    player.health -= 20; screenShake = 0.2; playSound('hit');
+                }
+ 
+                if (this.group.userData.hitEffect > 0) {
+                    this.bodyMat.color.setHex(0xffffff); this.bodyMat.wireframe = false; this.group.userData.hitEffect--;
+                } else { this.bodyMat.color.setHex(0xff0055); this.bodyMat.wireframe = true; }
+            }
+        }
+ 
+        class Boss {
+            constructor(x, z) {
+                this.group = new THREE.Group(); this.group.position.set(x, 6, z);
+                this.bodyMat = new THREE.MeshStandardMaterial({ color: 0xff00ff, emissive: 0xff0055, emissiveIntensity: 1.5, wireframe: true });
+                this.body = new THREE.Mesh(new THREE.OctahedronGeometry(4, 0), this.bodyMat);
+                this.core = new THREE.Mesh(new THREE.IcosahedronGeometry(2, 0), new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff}));
+                this.group.add(this.body); this.group.add(this.core);
+                scene.add(this.group);
+                this.group.userData = { health: 2500 * diffSettings[difficulty].healthMult, hitEffect: 0, isBoss: true };
+                this.velocity = new THREE.Vector3(); this.speed = 9 * diffSettings[difficulty].speedMult;
+                enemies.push(this);
+            }
+            update(delta, time) {
+                let targetPos = camera.position;
+                if(player.state === 'driving') targetPos = player.currentCar.group.position;
+                if(player.state === 'flying') targetPos = player.currentPlane.group.position;
+ 
+                const toPlayer = new THREE.Vector3().subVectors(targetPos, this.group.position);
+                toPlayer.y = 0; const distToPlayer = toPlayer.length();
+ 
+                if (distToPlayer < 200) {
+                    const dir = toPlayer.normalize();
+                    this.velocity.x = dir.x * this.speed; this.velocity.z = dir.z * this.speed;
+                }
+                this.group.position.x += this.velocity.x * delta;
+                this.group.position.z += this.velocity.z * delta;
+                this.group.position.y = 5 + Math.sin(time * 3) * 2;
+ 
+                this.body.rotation.y += delta * 3; this.body.rotation.x += delta * 1.5;
+                this.core.rotation.y -= delta * 4;
+ 
+                if (distToPlayer < 8 && Math.random() < 0.2 && !player.godmode) {
+                    player.health -= 50; screenShake = 0.5; playSound('hit');
+                }
+ 
+                if (this.group.userData.hitEffect > 0) {
+                    this.bodyMat.color.setHex(0xffffff); this.bodyMat.wireframe = false; this.group.userData.hitEffect--;
+                } else { this.bodyMat.color.setHex(0xff00ff); this.bodyMat.wireframe = true; }
+            }
+        }
+ 
+        class FinalBoss {
+            constructor(x, z) {
+                this.group = new THREE.Group(); this.group.position.set(x, 15, z);
+                this.bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffaa00, emissiveIntensity: 2.0, wireframe: true });
+                this.body = new THREE.Mesh(new THREE.TorusKnotGeometry(6, 1.5, 100, 16), this.bodyMat);
+                this.core = new THREE.Mesh(new THREE.SphereGeometry(4, 32, 32), new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xff0000}));
+                this.group.add(this.body); this.group.add(this.core);
+                scene.add(this.group);
+                this.group.userData = { health: 15000 * diffSettings[difficulty].healthMult, hitEffect: 0, isBoss: true, isFinalBoss: true };
+                this.velocity = new THREE.Vector3(); this.speed = 12 * diffSettings[difficulty].speedMult;
+                enemies.push(this);
+            }
+            update(delta, time) {
+                let targetPos = camera.position;
+                if(player.state === 'driving') targetPos = player.currentCar.group.position;
+                if(player.state === 'flying') targetPos = player.currentPlane.group.position;
+ 
+                const toPlayer = new THREE.Vector3().subVectors(targetPos, this.group.position);
+                toPlayer.y = 0; const distToPlayer = toPlayer.length();
+ 
+                if (distToPlayer < 300) {
+                    const dir = toPlayer.normalize();
+                    this.velocity.x = dir.x * this.speed; this.velocity.z = dir.z * this.speed;
+                }
+                this.group.position.x += this.velocity.x * delta;
+                this.group.position.z += this.velocity.z * delta;
+                this.group.position.y = 12 + Math.sin(time * 2) * 4;
+ 
+                this.body.rotation.y -= delta * 2; this.body.rotation.x += delta * 2;
+                this.core.rotation.y += delta * 5;
+ 
+                if (distToPlayer < 12 && Math.random() < 0.3 && !player.godmode) {
+                    player.health -= 80; screenShake = 0.8; playSound('hit');
+                }
+ 
+                if (this.group.userData.hitEffect > 0) {
+                    this.bodyMat.color.setHex(0xffffff); this.bodyMat.wireframe = false; this.group.userData.hitEffect--;
+                } else { this.bodyMat.color.setHex(0xffaa00); this.bodyMat.wireframe = true; }
+            }
+        }
+ 
+        function removeEnemy(enemyGroup) {
+            const index = enemies.findIndex(e => e.group === enemyGroup);
+            if (index > -1) { scene.remove(enemyGroup); enemies.splice(index, 1); }
+        }
+ 
+        function spawnEnemy() {
+            const angle = Math.random() * Math.PI * 2; const distance = 60 + Math.random() * 80;
+            new Enemy(Math.cos(angle) * distance, Math.sin(angle) * distance);
+        }
+ 
+        // --- SHOOTING LOGIC ---
+        function handleShooting(wp, now) {
+            lastShotTime = now;
+            if (!player.infiniteAmmo) player.ammo -= wp.cost;
+            playSound('shoot', wp.pitch);
+            screenShake = player.state === 'flying' ? 0.02 : 0.05;
+            flashLight.intensity = 3; flashLight.color.set(wp.color);
+            setTimeout(() => flashLight.intensity = 0, 50);
+            const cross = document.getElementById('crosshair');
+            cross.classList.add('shooting'); setTimeout(() => cross.classList.remove('shooting'), 60);
+ 
+            let rayOrigin = camera.position;
+            let rayDir = new THREE.Vector3();
+            camera.getWorldDirection(rayDir);
+            if (player.state === 'flying') {
+                rayOrigin = player.currentPlane.group.position.clone();
+                player.currentPlane.group.getWorldDirection(rayDir);
+            }
+            const pelletCount = wp.pellets || 1;
+            for (let p = 0; p < pelletCount; p++) {
+                let dir = rayDir.clone();
+                if (wp.spread) {
+                    dir.x += (Math.random() - 0.5) * wp.spread;
+                    dir.y += (Math.random() - 0.5) * wp.spread;
+                    dir.z += (Math.random() - 0.5) * wp.spread;
+                    dir.normalize();
+                }
+                const raycaster = new THREE.Raycaster(rayOrigin, dir);
+                const intersects = raycaster.intersectObjects(enemies.map(e => e.group), true);
+ 
+                if (intersects.length > 0) {
+                    let target = intersects[0].object;
+                    while(target.parent && target.userData.health === undefined) target = target.parent;
+                    if(target.userData && target.userData.health !== undefined) {
+                        resolveHit(target, wp);
+                    }
+                }
+            }
+            
+            // Send shooting action to server (for multiplayer)
+            if (ws && ws.readyState === WebSocket.OPEN && currentRoomCode) {
+                ws.send(JSON.stringify({
+                    type: 'player_action',
+                    action: 'shoot',
+                    data: {
+                        weapon: player.weaponIndex,
+                        position: camera.position.clone()
+                    }
+                }));
+            }
+        }
+ 
+        function resolveHit(target, wp) {
+            playSound('hit');
+            target.userData.health -= (wp.dmg * player.dmgMultiplier);
+            target.userData.hitEffect = 10;
+            if (target.userData.health <= 0) {
+                const isBoss = target.userData.isBoss; const isFinal = target.userData.isFinalBoss;
+                spawnExplosion(target.position, isFinal ? 300 : (isBoss ? 150 : 20), isBoss || isFinal);
+                removeEnemy(target);
+                const cMult = diffSettings[difficulty].creditMult;
+                if (isFinal) { playSound('bossDeath'); screenShake = 1.5; player.kills += 50; const gain = Math.round(25000 * cMult); totalCredits += gain; addKillMessage(`NEXUS APEX DESTROYED [+${gain} CR]`);
+                } else if (isBoss) { playSound('bossDeath'); screenShake = 0.8; player.kills += 5; const gain = Math.round(5000 * cMult); totalCredits += gain; addKillMessage(`OMEGA CONSTRUCT PURGED [+${gain} CR]`);
+                } else { player.kills++; const gain = Math.round(200 * cMult); totalCredits += gain; addKillMessage(`ENTITY SHATTERED [+${gain} CR]`); }
+                localStorage.setItem('synthPurge_credits', totalCredits);
+                document.getElementById('shop-credits-display').textContent = totalCredits;
+                document.getElementById('hud-credits').textContent = totalCredits;
+            }
+        }
+ 
+        // --- MULTIPLAYER GAME FUNCTIONS ---
         function startMultiplayerGame(gameState, players) {
             // Start the game in multiplayer mode
             const settings = diffSettings[difficulty];
@@ -605,29 +1622,184 @@
                 }));
             }
         }
-        
-        // Override the original shooting to send network updates
-        const originalHandleShooting = handleShooting;
-        handleShooting = function(wp, now) {
-            originalHandleShooting(wp, now);
-            
-            // Send shooting action to server
-            if (ws && ws.readyState === WebSocket.OPEN && currentRoomCode) {
-                ws.send(JSON.stringify({
-                    type: 'player_action',
-                    action: 'shoot',
-                    data: {
-                        weapon: player.weaponIndex,
-                        position: camera.position.clone()
+ 
+        // --- GAME LOOP ---
+        let lastTime = 0;
+ 
+        function update() {
+            const now = performance.now();
+            const delta = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now; const timeSec = now / 1000;
+ 
+            if (player.isDead || !gameActive || isShopOpen || isConsoleOpen || isPaused) { isMouseDown = false; if(player.isDead || isPaused) return; }
+ 
+            // Weapon Auto-fire
+            if (isMouseDown && (player.state === 'walking' || player.state === 'flying')) {
+                const wp = weapons[player.weaponIndex];
+                if(wp.name === 'V-BLASTER' || player.weaponIndex === 0) {
+                    if (now - lastShotTime > wp.cd && (player.ammo >= wp.cost || player.infiniteAmmo)) {
+                        handleShooting(wp, now);
                     }
-                }));
+                } else if (!isMouseDownPrev) {
+                    if (now - lastShotTime > wp.cd && (player.ammo >= wp.cost || player.infiniteAmmo)) {
+                        handleShooting(wp, now);
+                    }
+                }
             }
-        };
-        
-        // --- MODIFIED GAME LOOP FOR MULTIPLAYER ---
-        const originalUpdate = update;
-        update = function() {
-            originalUpdate();
+            isMouseDownPrev = isMouseDown;
+ 
+            interactTarget = null; document.getElementById('interaction-prompt').style.display = 'none';
+ 
+            // Update Particles
+            for(let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.position.addScaledVector(p.velocity, delta); p.life -= delta * 1.5; p.scale.setScalar(Math.max(0, p.life));
+                if(p.life <= 0) { scene.remove(p); particles.splice(i, 1); }
+            }
+            
+            // Update Ammo Crates
+            ammoCrates.forEach(crate => crate.update(delta, timeSec));
+            
+            // Update Supply Drop
+            updateSupplyDrop(delta, timeSec);
+            
+            // Supply Drop Timer
+            if (!supplyDropActive) {
+                supplyDropTimer -= delta;
+                if (supplyDropTimer <= 0) {
+                    spawnSupplyDrop();
+                    supplyDropTimer = 45 + Math.random() * 30; // Next drop in 45-75 seconds
+                }
+            }
+ 
+            // --- MOVEMENT STATE MACHINE ---
+            if (player.state === 'walking') {
+                const moveDir = new THREE.Vector3();
+                if (keys['w']) moveDir.z += 1;
+                if (keys['s']) moveDir.z -= 1;
+                if (keys['a']) moveDir.x += 1;
+                if (keys['d']) moveDir.x -= 1;
+ 
+                const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
+                const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), camDir).normalize();
+                const forward = new THREE.Vector3(camDir.x, 0, camDir.z).normalize();
+ 
+                if (moveDir.length() > 0) {
+                    moveDir.normalize();
+                    const speed = 14 * player.speedMultiplier;
+                    player.velocity.x = (right.x * moveDir.x + forward.x * moveDir.z) * speed;
+                    player.velocity.z = (right.z * moveDir.x + forward.z * moveDir.z) * speed;
+                } else { player.velocity.x *= 0.75; player.velocity.z *= 0.75; }
+ 
+                if (keys['shift'] && player.dashCooldown <= 0 && moveDir.length() > 0) {
+                    player.velocity.x += (right.x * moveDir.x + forward.x * moveDir.z) * 80;
+                    player.velocity.z += (right.z * moveDir.x + forward.z * moveDir.z) * 80;
+                    player.dashCooldown = player.dashCooldownMax; playSound('dash'); screenShake = 0.1;
+                }
+                if (player.dashCooldown > 0) player.dashCooldown -= delta;
+                document.getElementById('dash-bar-container').style.display = 'block';
+                document.getElementById('dash-fill').style.width = Math.max(0, (1 - (player.dashCooldown / player.dashCooldownMax)) * 100) + '%';
+ 
+                player.velocity.y -= 35 * delta;
+                camera.position.y += player.velocity.y * delta;
+                if (camera.position.y <= 1.8) { camera.position.y = 1.8; player.velocity.y = 0; player.grounded = true; }
+                else { player.grounded = false; }
+                if (keys[' '] && player.grounded && !isConsoleOpen) { player.velocity.y = 14; keys[' '] = false; }
+ 
+                camera.position.x += player.velocity.x * delta; camera.position.z += player.velocity.z * delta;
+                camera.rotation.order = 'YXZ'; camera.rotation.y = yaw; camera.rotation.x = pitch;
+ 
+                let nearestDist = 8;
+                carEntities.forEach(car => { const dist = camera.position.distanceTo(car.group.position); if (dist < nearestDist) { nearestDist = dist; interactTarget = { type: 'car', obj: car }; } });
+                planeEntities.forEach(plane => { const dist = camera.position.distanceTo(plane.group.position); if (dist < nearestDist) { nearestDist = dist; interactTarget = { type: 'plane', obj: plane }; } });
+                shopEntities.forEach(shop => { const dist = camera.position.distanceTo(shop.position); if (dist < nearestDist) { nearestDist = dist; interactTarget = { type: 'shop', obj: shop }; } });
+                if (interactTarget) document.getElementById('interaction-prompt').style.display = 'block';
+ 
+            } else if (player.state === 'driving') {
+                const car = player.currentCar;
+                if (keys['s']) car.speed += player.carAccel;
+                if (keys['w']) car.speed -= player.carAccel;
+                car.speed *= 0.96; car.speed = Math.max(-player.carMaxSpeed/2, Math.min(player.carMaxSpeed, car.speed));
+                if (Math.abs(car.speed) > 0.05) {
+                    if (keys['a']) car.angle += 0.05 * Math.sign(car.speed);
+                    if (keys['d']) car.angle -= 0.05 * Math.sign(car.speed);
+                }
+                car.group.rotation.y = car.angle;
+                car.group.position.x += Math.sin(car.angle) * car.speed; car.group.position.z += Math.cos(car.angle) * car.speed;
+ 
+                car.group.position.y += car.yVelocity * delta;
+                if(car.group.position.y > 0.5) { car.yVelocity -= 40 * delta; 
+                } else { car.group.position.y = 0.5; car.yVelocity = 0; if (keys[' ']) { car.yVelocity = 20; playSound('dash'); keys[' '] = false; } }
+                
+                camera.position.x = car.group.position.x - Math.sin(car.angle) * 10;
+                camera.position.z = car.group.position.z - Math.cos(car.angle) * 10;
+                camera.position.y = car.group.position.y + 4; camera.lookAt(car.group.position); yaw = camera.rotation.y;
+ 
+                document.getElementById('dash-speed').textContent = Math.floor(Math.abs(car.speed) * 70);
+                document.getElementById('dash-rpm').textContent = Math.floor(Math.abs(car.speed) * 3500 + 1000 + Math.random() * 200);
+                document.getElementById('dash-bar-container').style.display = 'none';
+                
+            } else if (player.state === 'flying') {
+                const p = player.currentPlane;
+                if (keys[' ']) p.speed += 40 * delta;
+                if (keys['shift']) p.speed -= 40 * delta;
+                p.speed *= 0.99; p.speed = Math.max(0, Math.min(120, p.speed));
+                
+                if (keys['s']) p.pitch += 2.0 * delta;
+                if (keys['w']) p.pitch -= 2.0 * delta;
+                if (keys['a']) { p.roll += 3.0 * delta; p.yaw += 1.5 * delta; }
+                if (keys['d']) { p.roll -= 3.0 * delta; p.yaw -= 1.5 * delta; }
+                if (!keys['a'] && !keys['d']) p.roll *= 0.92;
+ 
+                p.group.rotation.set(p.pitch, p.yaw, p.roll, 'YXZ');
+                
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(p.group.quaternion);
+                p.group.position.addScaledVector(forward, p.speed * delta);
+                
+                if (p.group.position.y < 1.5) { p.group.position.y = 1.5; p.pitch = Math.max(0, p.pitch); }
+                if (p.group.position.y > 400) p.group.position.y = 400;
+                
+                const camOffset = new THREE.Vector3(0, 5, 15).applyQuaternion(p.group.quaternion);
+                camera.position.copy(p.group.position).add(camOffset); camera.lookAt(p.group.position); yaw = camera.rotation.y; pitch = camera.rotation.x;
+ 
+                document.getElementById('dash-speed').textContent = Math.floor(p.speed * 8);
+                document.getElementById('dash-rpm').textContent = Math.floor(p.speed * 80 + 2000 + Math.random() * 100);
+                document.getElementById('dash-bar-container').style.display = 'none';
+            }
+ 
+            if(screenShake > 0) { camera.rotation.z = (Math.random() - 0.5) * screenShake; screenShake -= delta;
+            } else if (player.state !== 'flying') { camera.rotation.z = 0; }
+ 
+            // Update Entities
+            enemies.forEach(enemy => enemy.update(delta, timeSec));
+            
+            // --- WAVE & BOSS LOGIC ---
+            if (enemies.length === 0 && gameActive) {
+                waveNum++;
+                document.getElementById('wave-num').textContent = waveNum;
+ 
+                const spawnMult = diffSettings[difficulty].spawnMult;
+                if (waveNum % 10 === 0) {
+                    const angle = Math.random() * Math.PI * 2; new FinalBoss(Math.cos(angle) * 120, Math.sin(angle) * 120);
+                    for (let i = 0; i < Math.round(8 * spawnMult); i++) spawnEnemy(); addKillMessage('SYS: CRITICAL WARNING! NEXUS APEX DETECTED');
+                } else if (waveNum % 3 === 0) {
+                    const angle = Math.random() * Math.PI * 2; new Boss(Math.cos(angle) * 80, Math.sin(angle) * 80);
+                    for (let i = 0; i < Math.round(5 * spawnMult); i++) spawnEnemy(); addKillMessage('SYS: WARNING! OMEGA CONSTRUCT DETECTED');
+                } else {
+                    for (let i = 0; i < Math.round((10 + Math.floor(waveNum * 1.5)) * spawnMult); i++) spawnEnemy();
+                    addKillMessage(`SYS: ESCALATION DETECTED - WAVE ${waveNum}`);
+                }
+                if (waveNum > bestWave) { bestWave = waveNum; localStorage.setItem('synthPurge_bestWave', bestWave); }
+            }
+ 
+            // Passive regen
+            if (player.regenRate > 0 && !player.isDead && player.health < player.maxHealth) {
+                player.health = Math.min(player.maxHealth, player.health + player.regenRate * delta);
+            }
+ 
+            // HUD updates
+            document.getElementById('ammo-counter').textContent = player.infiniteAmmo ? 'INF' : player.ammo;
+            document.getElementById('health-fill').style.width = Math.max(0, (player.health / player.maxHealth) * 100) + '%';
             
             // Send periodic updates in multiplayer
             if (gameActive && ws && currentRoomCode && !isPaused) {
@@ -635,18 +1807,11 @@
                     sendGameUpdate();
                 }
             }
-        };
-        
-        // --- MODIFIED START GAME FOR MULTIPLAYER ---
-        const originalStartOffline = startOfflineGame;
-        startOfflineGame = function() {
-            if (document.querySelector('.mode-btn.active').dataset.mode === 'multi') {
-                // Multiplayer mode - wait for server to start
-                alert('Please connect to a server and join/host a room to play multiplayer');
-                return;
-            }
-            originalStartOffline();
-        };
+        }
+ 
+        // Standard render loop
+        function animate() { if (!gameActive) return; requestAnimationFrame(animate); update(); renderer.render(scene, camera); }
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         
         // --- INITIALIZATION ---
         // Set default server URL based on current host

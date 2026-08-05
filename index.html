@@ -109,12 +109,12 @@
  
         #interaction-prompt { display: none; position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); font-size: 24px; color: #ff0; text-shadow: 0 0 15px #ff0; background: rgba(0,0,0,0.8); padding: 10px 20px; border: 2px solid #ff0; z-index: 100; font-family: monospace; }
         
-        #dashboard { display: none; position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.8); border: 2px solid #0ff; padding: 20px; gap: 40px; box-shadow: 0 0 40px rgba(0, 255, 255, 0.4); border-radius: 10px; z-index: 105;}
+        #dashboard { display: none; position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.8); border: 2px solid #0ff; padding: 20px; gap: 40px; box-shadow: 0 0 40px rgba(0, 255, 255, 0.4); border-radius: 10px; z-index: 105; display: none; }
         .dash-gauge { text-align: center; }
         .dash-val { font-size: 48px; color: #f0f; font-family: 'Courier New', monospace; text-shadow: 0 0 20px #f0f; }
         .dash-label { font-size: 16px; color: #0ff; letter-spacing: 3px; }
  
-        #in-game-shop { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(5, 5, 20, 0.98); border: 2px solid #0ff; padding: 40px; box-shadow: 0 0 50px rgba(0, 255, 255, 0.4); z-index: 2500; flex-direction: column; align-items: center; }
+        #in-game-shop { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(5, 5, 20, 0.98); border: 2px solid #0ff; padding: 40px; box-shadow: 0 0 50px rgba(0, 255, 255, 0.4); z-index: 2500; flex-direction: column; align-items: center; max-height: 90vh; overflow-y: auto; }
         .shop-items { display: flex; gap: 20px; margin: 30px 0; flex-wrap: wrap; justify-content: center; }
         .shop-card { background: rgba(0,0,0,0.8); border: 1px solid #f0f; padding: 20px; text-align: center; width: 200px; }
         .shop-card h3 { color: #fff; margin-bottom: 10px; }
@@ -218,6 +218,17 @@
         #pause-menu .main-btn {
             padding: 15px 30px;
         }
+        
+        #best-wave-status {
+            color: #aaa;
+            font-size: 14px;
+            font-family: monospace;
+            text-align: center;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 5px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -252,7 +263,7 @@
                     <button class="main-btn" id="start-offline-btn" style="width:100%; border-color:#0ff; color:#0ff;">[ START RUN ]</button>
                 </div>
  
-                <div id="best-wave-status" style="color:#aaa; font-size:14px; font-family:monospace; text-align:center;"></div>
+                <div id="best-wave-status">NO RUNS RECORDED YET</div>
             </div>
  
             <div id="multiplayer-panel" style="display:none;">
@@ -439,9 +450,45 @@
  
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // All JavaScript goes here (the complete game code)
-        // [Full JavaScript from previous response goes here]
-        console.log('SYNTH PURGE v5.0 loaded');
+        // --- GAME/RUN STATE ---
+        let gameActive = false;
+        let isPaused = false;
+        let difficulty = 'normal';
+        const diffSettings = {
+            easy:   { healthMult: 0.7, speedMult: 0.85, spawnMult: 0.7, creditMult: 1.25, startCredits: 500 },
+            normal: { healthMult: 1.0, speedMult: 1.0,  spawnMult: 1.0, creditMult: 1.0,  startCredits: 0 },
+            hard:   { healthMult: 1.5, speedMult: 1.25, spawnMult: 1.4, creditMult: 1.5,  startCredits: 0 }
+        };
+ 
+        // DOM elements
+        const nameInput = document.getElementById('player-name');
+        const hudCreditsDisplay = document.getElementById('hud-credits');
+ 
+        // Best wave record (persisted)
+        let bestWave = parseInt(localStorage.getItem('synthPurge_bestWave')) || 0;
+        const bestWaveStatus = document.getElementById('best-wave-status');
+        if (bestWaveStatus) {
+            bestWaveStatus.textContent = bestWave > 0 ? `BEST WAVE REACHED: ${bestWave}` : 'NO RUNS RECORDED YET';
+        }
+ 
+        document.querySelectorAll('.diff-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                difficulty = btn.dataset.diff;
+                document.querySelectorAll('.diff-btn').forEach(b => b.style.boxShadow = 'none');
+                btn.style.boxShadow = `0 0 20px ${getComputedStyle(btn).color}`;
+            });
+        });
+ 
+        // Initial Time Status
+        const currentHour = new Date().getHours();
+        const currentMins = new Date().getMinutes().toString().padStart(2, '0');
+        const isDaytime = currentHour >= 6 && currentHour < 18;
+        const timeStatus = document.getElementById('time-status');
+        if (timeStatus) {
+            timeStatus.textContent = `[LOCAL CLOCK: ${currentHour}:${currentMins}] :: [ENVIRONMENT: ${isDaytime ? 'NEON SUNRISE' : 'MIDNIGHT GRID'}]`;
+        }
+ 
+        console.log('SYNTH PURGE v5.0 - Initialized');
     </script>
 </body>
 </html>
